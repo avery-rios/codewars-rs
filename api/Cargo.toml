@@ -1,0 +1,16 @@
+[package]
+name = "codewars_api"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = { version = "0.4.31", default-features = false, features = ["serde"] }
+reqwest = { version = "0.11.23", default-features = false, features = [
+    "gzip",
+    "json",
+    "rustls-tls",
+] }
+serde = { version = "1.0.193", features = ["derive"] }
+codewars_types = { path = "../types" }
