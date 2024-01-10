@@ -1,0 +1,17 @@
+[package]
+name = "codewars_cli"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+codewars_solution = { path = "../solution" }
+codewars_types = { path = "../types" }
+codewars_api = { path = "../api" }
+rustyline = "13.0.0"
+anyhow = "1.0.79"
+chrono = "0.4.31"
+tokio = { version = "1.35.1", features = ["rt", "time"] }
+clap = { version = "4.4.14", features = ["derive"] }
+shlex = "1.2.0"
