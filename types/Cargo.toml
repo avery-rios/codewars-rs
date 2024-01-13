@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 serde = { version = "1.0.193", default-features = false, features = ["derive"] }
+
+[dev-dependencies]
+hex-literal = "0.4.1"

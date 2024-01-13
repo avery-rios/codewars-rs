@@ -16,3 +16,6 @@ impl ApiVersion {
 
 pub mod rank;
 pub use rank::{KataRankId, UserRankId};
+
+pub mod kata_id;
+pub use kata_id::KataId;

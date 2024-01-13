@@ -8,12 +8,14 @@ use rustyline::Editor;
 use std::{fs, path::Path};
 use tokio::runtime::{self, Runtime};
 
+use codewars_types::KataId;
+
 #[derive(Subcommand)]
 enum KataCmd {
     /// Get kata information
-    Get { id: String },
+    Get { id: KataId },
 }
-async fn get_kata(id: &str, client: &Client, root: &Path) -> Result<()> {
+async fn get_kata(id: &KataId, client: &Client, root: &Path) -> Result<()> {
     use solution::*;
     fn to_author(auth: api::Author) -> Author {
         Author {

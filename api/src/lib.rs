@@ -4,6 +4,7 @@ pub use codewars_types::{lang, rank};
 
 use chrono::{DateTime, Utc};
 use codewars_types::{
+    kata_id::KataId,
     lang::LangId,
     rank::{KataRankId, UserRankId},
 };
@@ -81,7 +82,7 @@ pub struct User {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompletedChallenge {
-    pub id: String,
+    pub id: KataId,
     pub name: String,
     pub slug: String,
     pub completed_at: DateTime<Utc>,
@@ -99,7 +100,7 @@ pub struct Paged<T> {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthoredChallenge {
-    pub id: String,
+    pub id: KataId,
     pub name: String,
     pub description: String,
     pub rank: Option<i8>,
@@ -153,7 +154,7 @@ pub struct Unresolved {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodeChallenge {
-    pub id: String,
+    pub id: KataId,
     pub name: String,
     pub slug: String,
     pub url: String,
@@ -223,7 +224,7 @@ impl Client {
         .await
         .map(|w: Wrapper| w.data)
     }
-    pub async fn get_challenge(&self, id: &str) -> reqwest::Result<CodeChallenge> {
+    pub async fn get_challenge(&self, id: &KataId) -> reqwest::Result<CodeChallenge> {
         self.get(format!(
             "https://www.codewars.com/api/v1/code-challenges/{}",
             id

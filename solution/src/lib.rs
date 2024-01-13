@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub use codewars_types::{rank, ApiVersion};
+pub use codewars_types::{rank, ApiVersion, KataId};
 use rank::KataRankId;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,7 +24,7 @@ pub struct KataApprove {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KataInfo {
     pub name: String,
-    pub id: String,
+    pub id: KataId,
     pub slug: String,
     pub url: String,
     pub created_by: Author,
@@ -52,9 +52,9 @@ pub struct Metadata {
 /// Slug will be truncated if it's too long
 pub fn kata_path(root: impl AsRef<Path>, kata: &KataInfo) -> PathBuf {
     const MAX_FILENAME: usize = 128;
-    let id_len = kata.id.len() + 2; // length of id and brackets
-    let slug = if kata.slug.len() + id_len > MAX_FILENAME {
-        &kata.slug[0..(MAX_FILENAME - id_len)]
+    const ID_LEN: usize = 24 + 2; // length of id and brackets
+    let slug = if kata.slug.len() + ID_LEN > MAX_FILENAME {
+        &kata.slug[0..(MAX_FILENAME - ID_LEN)]
     } else {
         kata.slug.as_str()
     };
