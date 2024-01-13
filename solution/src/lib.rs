@@ -1,9 +1,6 @@
 use chrono::{DateTime, FixedOffset, Utc};
 use serde::{Deserialize, Serialize};
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::{fs, io, path::PathBuf};
 
 pub use codewars_types::{rank, ApiVersion, KataId};
 use rank::KataRankId;
@@ -48,18 +45,20 @@ pub struct Metadata {
     pub updated_at: Vec<DateTime<FixedOffset>>,
 }
 
-/// push kata path to a [PathBuf]
+/// get kata dir name
 /// Slug will be truncated if it's too long
-pub fn kata_path(root: impl AsRef<Path>, kata: &KataInfo) -> PathBuf {
+pub fn kata_dir(id: &KataId, slug: &str) -> String {
     const MAX_FILENAME: usize = 128;
     const ID_LEN: usize = 24 + 2; // length of id and brackets
-    let slug = if kata.slug.len() + ID_LEN > MAX_FILENAME {
-        &kata.slug[0..(MAX_FILENAME - ID_LEN)]
+    let slug = if slug.len() + ID_LEN > MAX_FILENAME {
+        &slug[0..(MAX_FILENAME - ID_LEN)]
     } else {
-        kata.slug.as_str()
+        slug
     };
-    root.as_ref().join(format!("{}[{}]", slug, &kata.id))
+    format!("{}[{}]", slug, id)
 }
+
+const INFO_FILE: &str = "info.json";
 
 /// save kata info under directory `root`
 /// - metadata file meta.json
@@ -78,10 +77,12 @@ pub fn write_kata(
     fs::write(&root, to_vec_pretty(meta).unwrap())?;
     root.pop();
 
-    root.push("info.json");
+    root.push(INFO_FILE);
     fs::write(&root, to_vec_pretty(info).unwrap())?;
     root.pop();
 
     root.push("description.md");
     fs::write(&root, desc)
 }
+
+pub mod index;

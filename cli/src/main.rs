@@ -53,7 +53,7 @@ async fn get_kata(id: &KataId, client: &Client, root: &Path) -> Result<()> {
         category: kata.category,
         tags: kata.tags,
     };
-    let kata_root = kata_path(root, &info);
+    let kata_root = root.join(kata_dir(&info.id, &info.slug));
     if kata_root.exists() {
         anyhow::bail!("Kata {} is already fetched", id);
     }
