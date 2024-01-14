@@ -1,5 +1,12 @@
 [workspace]
-members = ["./types", "./api", "./api_unofficial", "./solution", "./cli"]
+members = [
+  "./types",
+  "./api",
+  "./api_unofficial",
+  "./solution",
+  "./workspace",
+  "./cli",
+]
 resolver = "2"
 
 [profile.release-lto]
