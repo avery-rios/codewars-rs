@@ -97,13 +97,42 @@ pub struct Paged<T> {
     pub data: Vec<T>,
 }
 
+fn deserialize_opt_kata_rank<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<KataRankId>, D::Error> {
+    struct Visitor;
+    impl<'de> de::Visitor<'de> for Visitor {
+        type Value = Option<KataRankId>;
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("an integer between -8 and -1")
+        }
+        fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            match v.try_into().ok().and_then(KataRankId::from_id) {
+                Some(v) => Ok(Some(v)),
+                None => Err(E::invalid_value(de::Unexpected::Signed(v), &self)),
+            }
+        }
+        fn visit_none<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(None)
+        }
+    }
+    deserializer.deserialize_i64(Visitor)
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthoredChallenge {
     pub id: KataId,
     pub name: String,
     pub description: String,
-    pub rank: Option<i8>,
+    #[serde(deserialize_with = "deserialize_opt_kata_rank")]
+    pub rank: Option<KataRankId>,
     pub rank_name: Option<String>,
     pub tags: Vec<String>,
     pub languages: Vec<LangId>,
