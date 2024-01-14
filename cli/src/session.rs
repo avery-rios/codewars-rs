@@ -70,6 +70,16 @@ pub fn start_session(
             .context("failed to create workspace")?;
             session_cmd(env, cmd_state, &ses_state.kata_id, lang, session, &ws)
         }
+        KnownLangId::Haskell => {
+            let ws = workspace::Haskell::create(
+                create_workspace_dir(env, &ses_state, "haskell")
+                    .context("failed to create workspace")?,
+                &session.info.setup,
+                &session.info.example_fixture,
+            )
+            .context("failed to create workspace")?;
+            session_cmd(env, cmd_state, &ses_state.kata_id, lang, session, &ws)
+        }
         l => {
             bail!("Unsupported language {}", l)
         }
@@ -91,6 +101,14 @@ pub fn open_session(env: &CmdEnv, cmd_state: &mut CmdState, path: impl AsRef<Pat
             state.language,
             session,
             &workspace::Rust::open(path.as_ref().to_path_buf()),
+        ),
+        KnownLangId::Haskell => session_cmd(
+            env,
+            cmd_state,
+            &state.kata_id,
+            state.language,
+            session,
+            &workspace::Haskell::open(path.as_ref()).context("failed to open workspace")?,
         ),
         l => {
             bail!("Unsupported language {}", l)

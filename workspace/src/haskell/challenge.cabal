@@ -1,0 +1,26 @@
+cabal-version:      3.0
+name:               challenge
+version:            0.1.0.0
+build-type:         Simple
+
+common warnings
+    ghc-options: -Wall
+
+library
+    import:           warnings
+    exposed-modules:  {code_module}
+    build-depends:    base
+    hs-source-dirs:   src
+    default-language: Haskell2010
+
+test-suite sample
+    import:           warnings
+    default-language: Haskell2010
+    other-modules:    {test_module}
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test/sample
+    main-is:          Main.hs
+    build-depends:
+        base,
+        hspec,
+        challenge

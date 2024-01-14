@@ -1,0 +1,4 @@
+ignore-project: False
+optimization: 2
+test-options: "--color"
+test-show-details: streaming
