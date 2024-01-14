@@ -16,6 +16,10 @@ mod kata;
 
 mod session;
 
+mod suggest;
+
+mod rank;
+
 #[derive(Subcommand)]
 enum KataCmd {
     /// Get kata information
@@ -23,6 +27,11 @@ enum KataCmd {
     Train {
         #[arg(long)]
         id: KataId,
+        #[arg(long)]
+        lang: KnownLangId,
+    },
+    /// Suggest kata
+    Suggest {
         #[arg(long)]
         lang: KnownLangId,
     },
@@ -37,6 +46,7 @@ impl KataCmd {
                 Path::new(&env.root),
             )),
             Self::Train { id, lang } => session::start_session(env, state, id, lang),
+            Self::Suggest { lang } => suggest::start_suggest(env, state, lang),
         }
     }
 }
