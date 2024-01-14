@@ -111,7 +111,9 @@ impl WorkspaceObject for Rust {
         tmp.pop();
 
         tmp.push("Cargo.lock");
-        fs::remove_file(&tmp)?;
+        if tmp.exists() {
+            fs::remove_file(&tmp)?;
+        }
         Ok(())
     }
 }
