@@ -7,13 +7,13 @@ use crate::{Code, WorkspaceObject};
 
 macro_rules! crate_name {
     () => {
-        "solution"
+        "challenge"
     };
 }
 
 const CARGO_1_62: &str = concat!(
     "[package]\n",
-    concat!("name = ", crate_name!(), "\n"),
+    concat!("name = \"", crate_name!(), "\"\n"),
     "version = \"0.1.0\"\n",
     "edition = \"2021\"\n",
     "rust-version = \"1.62\"\n",
