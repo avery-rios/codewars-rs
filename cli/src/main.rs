@@ -2,20 +2,21 @@ extern crate codewars_api as api;
 extern crate codewars_solution as solution;
 
 use anyhow::{Context, Result};
-use api::Client;
-use clap::{FromArgMatches, Parser, Subcommand};
-use rustyline::Editor;
+use clap::{Parser, Subcommand};
 use std::{fs, path::Path};
-use tokio::runtime::{self, Runtime};
+use tokio::runtime;
 
 use codewars_types::KataId;
+
+mod command;
+use command::{next_cmd, print_err, CmdEnv};
 
 #[derive(Subcommand)]
 enum KataCmd {
     /// Get kata information
     Get { id: KataId },
 }
-async fn get_kata(id: &KataId, client: &Client, root: &Path) -> Result<()> {
+async fn get_kata(id: &KataId, client: &api::Client, root: &Path) -> Result<()> {
     use solution::*;
     fn to_author(auth: api::Author) -> Author {
         Author {
@@ -73,9 +74,12 @@ async fn get_kata(id: &KataId, client: &Client, root: &Path) -> Result<()> {
     .context("failed to write kata")
 }
 impl KataCmd {
-    async fn run(self, client: &Client, root: &Path) -> Result<()> {
+    fn run(self, env: &CmdEnv) -> Result<()> {
         match self {
-            Self::Get { id } => get_kata(&id, client, root).await,
+            Self::Get { id } => {
+                env.runtime
+                    .block_on(get_kata(&id, &env.api_client, Path::new(&env.root)))
+            }
         }
     }
 }
@@ -88,9 +92,9 @@ enum Command {
     Exit,
 }
 impl Command {
-    async fn run(self, client: &Client, root: &Path) -> Result<bool> {
+    fn run(self, env: &CmdEnv) -> Result<bool> {
         match self {
-            Self::Kata(k) => k.run(client, root).await?,
+            Self::Kata(k) => k.run(env)?,
             Self::Exit => return Ok(false),
         }
         Ok(true)
@@ -100,47 +104,36 @@ impl Command {
 #[derive(Parser)]
 struct Cli {
     #[command(subcommand)]
-    command: Command,
-}
-
-type LineEditor = Editor<(), rustyline::history::MemHistory>;
-
-fn read_exec(client: &Client, runtime: &Runtime, editor: &mut LineEditor) -> Result<bool> {
-    let inputs = shlex::split(&editor.readline("codewars> ")?).context("failed to split input")?;
-    let c = Command::augment_subcommands(clap::Command::new("repl"))
-        .multicall(true)
-        .try_get_matches_from(inputs)
-        .and_then(|m| Command::from_arg_matches(&m));
-    match c {
-        Ok(cmd) => runtime.block_on(cmd.run(client, Path::new("."))),
-        Err(e) => {
-            e.print().unwrap();
-            Ok(true)
-        }
-    }
+    command: Option<Command>,
 }
 
 fn main() -> Result<()> {
-    let runtime = runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .context("failed to create runtime")?;
-    let mut editor = Editor::with_history(
-        rustyline::Config::builder()
-            .auto_add_history(true)
-            .max_history_size(1000)
-            .unwrap()
-            .build(),
-        rustyline::history::MemHistory::new(),
-    )
-    .context("failed to create line editor")?;
-    let client = api::Client::new();
-    loop {
-        match read_exec(&client, &runtime, &mut editor) {
-            Ok(true) => (),
-            Ok(false) => break,
-            Err(e) => println!("error: {:?}", e),
+    let cli = Cli::parse();
+    let env = {
+        let runtime = runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .context("failed to create runtime")?;
+        CmdEnv {
+            root: String::from("."),
+            api_client: codewars_api::Client::new(),
+            runtime,
         }
+    };
+    let mut editor = command::new_editor().context("failed to create line editor")?;
+    match cli.command {
+        Some(c) => {
+            if let Err(e) = c.run(&env) {
+                print_err(e)
+            }
+        }
+        None => loop {
+            match next_cmd::<Command>("codewars> ", &mut editor).run(&env) {
+                Ok(true) => (),
+                Ok(false) => break,
+                Err(e) => print_err(e),
+            }
+        },
     }
     Ok(())
 }
