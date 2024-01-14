@@ -52,8 +52,13 @@ pub fn save_kata(
     .context("failed to write kata")
 }
 
-pub async fn get_kata(id: &KataId, client: &codewars_api::Client, root: &Path) -> Result<()> {
-    use codewars_solution::{kata_dir, ApiVersion, Metadata, Version};
+pub async fn get_kata(
+    id: &KataId,
+    client: &codewars_api::Client,
+    index: &mut codewars_solution::index::Index,
+    root: &Path,
+) -> Result<()> {
+    use codewars_solution::{index::IndexEntry, kata_dir, ApiVersion, Metadata, Version};
 
     let kata = client
         .get_challenge(id)
@@ -66,6 +71,11 @@ pub async fn get_kata(id: &KataId, client: &codewars_api::Client, root: &Path) -
     }
     fs::create_dir(&kata_root).context("failed to create kata dir")?;
     println!("Kata {} will be saved to {}", id, kata_root.display());
+    let entry = IndexEntry {
+        name: kata.name.clone(),
+        slug: kata.slug.clone(),
+        path: dir_name,
+    };
     save_kata(
         kata_root,
         &Metadata {
@@ -77,5 +87,6 @@ pub async fn get_kata(id: &KataId, client: &codewars_api::Client, root: &Path) -
         kata,
     )
     .context("failed to write kata")?;
+    index.kata.insert(id.clone(), entry);
     Ok(())
 }

@@ -1,6 +1,7 @@
 use anyhow::Context;
 use clap::{FromArgMatches, Subcommand};
 use rustyline::Editor;
+use std::path::PathBuf;
 
 pub type LineEditor = Editor<(), rustyline::history::MemHistory>;
 
@@ -41,8 +42,13 @@ pub fn next_cmd<C: FromArgMatches + Subcommand>(prompt: &str, editor: &mut LineE
 
 pub struct CmdEnv {
     pub root: String,
+    pub index_path: PathBuf,
     pub runtime: tokio::runtime::Runtime,
     pub api_client: codewars_api::Client,
+}
+
+pub struct CmdState {
+    pub index: codewars_solution::index::Index,
 }
 
 pub fn print_err(err: anyhow::Error) {
