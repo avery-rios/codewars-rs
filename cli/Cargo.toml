@@ -9,9 +9,16 @@ edition = "2021"
 codewars_solution = { path = "../solution" }
 codewars_types = { path = "../types" }
 codewars_api = { path = "../api" }
+codewars_unofficial = { path = "../api_unofficial" }
+codewars_workspace = { path = "../workspace" }
 rustyline = "13.0.0"
 anyhow = "1.0.79"
 chrono = "0.4.31"
 tokio = { version = "1.35.1", features = ["rt", "time"] }
-clap = { version = "4.4.14", features = ["derive"] }
+clap = { version = "4.4.14", features = ["derive", "env"] }
+serde = { version = "1.0.193", features = ["derive"] }
+serde_json = "1.0.111"
 shlex = "1.2.0"
+fs_extra = "1.3.0"
+env_logger = "0.10.1"
+yansi = "0.5.1"

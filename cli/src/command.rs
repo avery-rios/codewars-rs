@@ -43,14 +43,17 @@ pub fn next_cmd<C: FromArgMatches + Subcommand>(prompt: &str, editor: &mut LineE
 pub struct CmdEnv {
     pub root: String,
     pub index_path: PathBuf,
+    pub workspace: String,
     pub runtime: tokio::runtime::Runtime,
     pub api_client: codewars_api::Client,
+    pub unofficial_client: Option<codewars_unofficial::Client>,
 }
 
 pub struct CmdState {
+    pub editor: LineEditor,
     pub index: codewars_solution::index::Index,
 }
 
 pub fn print_err(err: anyhow::Error) {
-    eprintln!("error: {:?}", err)
+    eprintln!("{}: {:?}", yansi::Paint::red("error"), err)
 }
