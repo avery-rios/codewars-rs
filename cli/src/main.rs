@@ -33,9 +33,32 @@ impl KataCmd {
 }
 
 #[derive(Subcommand)]
+enum IndexCmd {
+    /// Rebuild kata index
+    Rebuild,
+    /// save kata index
+    Save,
+}
+impl IndexCmd {
+    fn run(self, env: &CmdEnv, state: &mut CmdState) -> Result<()> {
+        match self {
+            Self::Rebuild => {
+                state.index = index::Index::build(&env.root)?;
+            }
+            Self::Save => {
+                state.index.write(&env.index_path)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Subcommand)]
 enum Command {
     #[command(subcommand)]
     Kata(KataCmd),
+    #[command(subcommand)]
+    Index(IndexCmd),
     /// exit codewars cli
     Exit {
         #[arg(long)]
@@ -46,6 +69,7 @@ impl Command {
     fn run(self, env: &CmdEnv, state: &mut CmdState) -> Result<bool> {
         match self {
             Self::Kata(k) => k.run(env, state)?,
+            Self::Index(idx) => idx.run(env, state)?,
             Self::Exit { no_save } => {
                 if !no_save {
                     state
