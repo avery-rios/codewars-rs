@@ -140,7 +140,7 @@ fn save(
     tag: Option<String>,
     workspace: &dyn WorkspaceObject,
 ) -> Result<()> {
-    let mut kata_dir = match cmd_state.index.kata.entry(kata.to_owned()) {
+    let mut kata_dir = match cmd_state.index_mut().kata.entry(kata.to_owned()) {
         btree_map::Entry::Occupied(o) => Path::new(&env.root).join(&o.get().path),
         btree_map::Entry::Vacant(v) => {
             println!("Getting kata {}", kata);
@@ -172,6 +172,7 @@ fn save(
             )
             .context("failed to save kata info")?;
             v.insert(entry);
+            cmd_state.index_dirty = true;
             path
         }
     };

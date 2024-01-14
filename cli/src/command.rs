@@ -51,7 +51,24 @@ pub struct CmdEnv {
 
 pub struct CmdState {
     pub editor: LineEditor,
-    pub index: codewars_solution::index::Index,
+    index: codewars_solution::index::Index,
+    pub index_dirty: bool,
+}
+impl CmdState {
+    pub fn new(editor: LineEditor, index: codewars_solution::index::Index) -> Self {
+        Self {
+            editor,
+            index,
+            index_dirty: false,
+        }
+    }
+    pub fn index(&self) -> &codewars_solution::index::Index {
+        &self.index
+    }
+    pub fn index_mut(&mut self) -> &mut codewars_solution::index::Index {
+        self.index_dirty = true;
+        &mut self.index
+    }
 }
 
 pub fn print_err(err: anyhow::Error) {

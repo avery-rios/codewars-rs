@@ -41,12 +41,16 @@ enum KataCmd {
 impl KataCmd {
     fn run(self, env: &CmdEnv, state: &mut CmdState) -> Result<()> {
         match self {
-            Self::Get { id } => env.runtime.block_on(kata::get_kata(
-                &id,
-                &env.api_client,
-                &mut state.index,
-                Path::new(&env.root),
-            )),
+            Self::Get { id } => {
+                env.runtime.block_on(kata::get_kata(
+                    &id,
+                    &env.api_client,
+                    state.index_mut(),
+                    Path::new(&env.root),
+                ))?;
+                state.index_dirty = true;
+                Ok(())
+            }
             Self::Train { id, lang } => session::start_session(env, state, id, lang),
             Self::Suggest { lang } => suggest::start_suggest(env, state, lang),
         }
@@ -64,10 +68,11 @@ impl IndexCmd {
     fn run(self, env: &CmdEnv, state: &mut CmdState) -> Result<()> {
         match self {
             Self::Rebuild => {
-                state.index = index::Index::build(&env.root)?;
+                *state.index_mut() = index::Index::build(&env.root)?;
             }
             Self::Save => {
-                state.index.write(&env.index_path)?;
+                state.index().write(&env.index_path)?;
+                state.index_dirty = false;
             }
         }
         Ok(())
@@ -127,9 +132,9 @@ impl Command {
             Self::Session(s) => s.run(env, state)?,
             Self::User(u) => u.run(env, state)?,
             Self::Exit { no_save } => {
-                if !no_save {
+                if !no_save && state.index_dirty {
                     state
-                        .index
+                        .index()
                         .write(&env.index_path)
                         .context("failed to write index")?;
                 }
@@ -189,21 +194,23 @@ fn main() -> Result<()> {
             runtime,
         }
     };
-    let mut state = CmdState {
-        editor: command::new_editor().context("failed to create line editor")?,
-        index: if env.index_path.exists() {
+    let mut state = CmdState::new(
+        command::new_editor().context("failed to create line editor")?,
+        if env.index_path.exists() {
             index::Index::open(&env.index_path).context("failed to open index")?
         } else {
             index::Index::new()
         },
-    };
+    );
     match cli.command {
         Some(c) => {
             if let Err(e) = c.run(&env, &mut state) {
                 print_err(e)
             }
-            if let Err(e) = state.index.write(&env.index_path) {
-                print_err(anyhow::Error::new(e).context("failed to save index"));
+            if state.index_dirty {
+                if let Err(e) = state.index().write(&env.index_path) {
+                    print_err(anyhow::Error::new(e).context("failed to save index"));
+                }
             }
         }
         None => loop {
