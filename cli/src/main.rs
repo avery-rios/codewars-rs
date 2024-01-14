@@ -20,6 +20,8 @@ mod suggest;
 
 mod rank;
 
+mod user;
+
 #[derive(Subcommand)]
 enum KataCmd {
     /// Get kata information
@@ -85,6 +87,23 @@ impl SessionCmd {
 }
 
 #[derive(Subcommand)]
+enum UserCmd {
+    Info { id: String },
+}
+impl UserCmd {
+    fn run(self, env: &CmdEnv, _: &mut CmdState) -> Result<()> {
+        match self {
+            Self::Info { id } => user::show_user(
+                &env.runtime
+                    .block_on(env.api_client.get_user(&id))
+                    .context("failed to get user")?,
+            ),
+        }
+        Ok(())
+    }
+}
+
+#[derive(Subcommand)]
 enum Command {
     #[command(subcommand)]
     Kata(KataCmd),
@@ -92,6 +111,8 @@ enum Command {
     Index(IndexCmd),
     #[command(subcommand)]
     Session(SessionCmd),
+    #[command(subcommand)]
+    User(UserCmd),
     /// exit codewars cli
     Exit {
         #[arg(long)]
@@ -104,6 +125,7 @@ impl Command {
             Self::Kata(k) => k.run(env, state)?,
             Self::Index(idx) => idx.run(env, state)?,
             Self::Session(s) => s.run(env, state)?,
+            Self::User(u) => u.run(env, state)?,
             Self::Exit { no_save } => {
                 if !no_save {
                     state

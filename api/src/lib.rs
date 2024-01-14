@@ -69,12 +69,13 @@ pub struct CodeChallenges {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct User {
+    pub id: String,
     pub username: String,
-    pub name: String,
+    pub name: Option<String>,
     pub honor: u32,
-    pub clan: String,
-    pub leaderboard_position: u32,
-    pub skills: Vec<String>,
+    pub clan: Option<String>,
+    pub leaderboard_position: Option<u32>,
+    pub skills: Option<Vec<String>>,
     pub ranks: Ranks,
     pub code_challenges: CodeChallenges,
 }
