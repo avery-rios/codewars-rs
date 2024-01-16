@@ -15,7 +15,7 @@ fn module_name(src: &str) -> Option<&str> {
         src.trim_start()
             .strip_prefix("module")?
             .trim_start()
-            .split_once(' ')?
+            .split_once(char::is_whitespace)?
             .0,
     )
 }
@@ -203,10 +203,24 @@ impl WorkspaceObject for Haskell {
 
 #[cfg(test)]
 mod test {
-    use super::module_name;
+    mod mod_name {
+        use super::super::module_name;
 
-    #[test]
-    fn name() {
-        assert_eq!(module_name("module M1.M2.M3 where").unwrap(), "M1.M2.M3");
+        #[test]
+        fn simple() {
+            assert_eq!(module_name("module M1.M2.M3 where").unwrap(), "M1.M2.M3");
+            assert_eq!(
+                module_name("module M1.M2.M3 (f1, f2, f3) where").unwrap(),
+                "M1.M2.M3"
+            );
+        }
+
+        #[test]
+        fn multiline_name() {
+            assert_eq!(
+                module_name("module M1.M2\n    ( f1, f2, f3) where").unwrap(),
+                "M1.M2"
+            );
+        }
     }
 }
