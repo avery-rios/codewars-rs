@@ -9,11 +9,14 @@ use super::{Code, WorkspaceObject};
 const STATE_FILE: &str = "haskell_state.json";
 
 /// get haskell module name
-/// requires no comment before module keyword
 fn module_name(src: &str) -> Option<&str> {
+    let mut s = src.trim_start();
+    while s.starts_with("{-") {
+        let (_, t) = s.split_once("-}")?;
+        s = t.trim_start();
+    }
     Some(
-        src.trim_start()
-            .strip_prefix("module")?
+        s.strip_prefix("module")?
             .trim_start()
             .split_once(char::is_whitespace)?
             .0,
@@ -221,6 +224,19 @@ mod test {
                 module_name("module M1.M2\n    ( f1, f2, f3) where").unwrap(),
                 "M1.M2"
             );
+        }
+
+        #[test]
+        fn extension() {
+            assert_eq!(
+                module_name(
+                    "{-# LANGUAGE LambdaCase #-}\n\
+                     {-# LANGUAGE TupleSections #-}\n\
+                     module M1.M2 where"
+                )
+                .unwrap(),
+                "M1.M2"
+            )
         }
     }
 }
