@@ -61,6 +61,15 @@ pub fn start_session(
     };
     let session = Session::from_project(client, &ses_state.project, &ses_state.session);
     match lang {
+        KnownLangId::Coq => {
+            let ws = workspace::Coq::create(
+                create_workspace_dir(env, &ses_state, "coq")?,
+                &session.info.setup,
+                &session.info.example_fixture,
+            )
+            .context("failed to create workspace")?;
+            session_cmd(env, cmd_state, &ses_state.kata_id, lang, session, &ws)
+        }
         KnownLangId::Rust => {
             let ws = workspace::Rust::create(
                 create_workspace_dir(env, &ses_state, "rust")?,
@@ -94,6 +103,14 @@ pub fn open_session(env: &CmdEnv, cmd_state: &mut CmdState, path: impl AsRef<Pat
     .context("invalid session file")?;
     let session = Session::from_project(client, &state.project, &state.session);
     match state.language {
+        KnownLangId::Coq => session_cmd(
+            env,
+            cmd_state,
+            &state.kata_id,
+            state.language,
+            session,
+            &workspace::Coq::open(path.as_ref()).context("failed to open workspace")?,
+        ),
         KnownLangId::Rust => session_cmd(
             env,
             cmd_state,

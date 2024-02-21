@@ -19,3 +19,6 @@ pub use rust::Rust;
 
 pub mod haskell;
 pub use haskell::Haskell;
+
+pub mod coq;
+pub use coq::Coq;
