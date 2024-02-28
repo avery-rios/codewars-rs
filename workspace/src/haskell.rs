@@ -15,6 +15,10 @@ fn module_name(src: &str) -> Option<&str> {
         let (_, t) = s.split_once("-}")?;
         s = t.trim_start();
     }
+    while s.starts_with("-- ") {
+        let (_, t) = s.split_once('\n')?;
+        s = t.trim_start();
+    }
     Some(
         s.strip_prefix("module")?
             .trim_start()
@@ -209,33 +213,37 @@ mod test {
     mod mod_name {
         use super::super::module_name;
 
+        fn test_module(code: &str, exp: &str) {
+            assert_eq!(module_name(code).unwrap(), exp);
+        }
+
         #[test]
         fn simple() {
-            assert_eq!(module_name("module M1.M2.M3 where").unwrap(), "M1.M2.M3");
-            assert_eq!(
-                module_name("module M1.M2.M3 (f1, f2, f3) where").unwrap(),
-                "M1.M2.M3"
-            );
+            test_module("module M1.M2.M3 where", "M1.M2.M3");
+            test_module("module M1.M2.M3 (f1, f2, f3) where", "M1.M2.M3");
         }
 
         #[test]
         fn multiline_name() {
-            assert_eq!(
-                module_name("module M1.M2\n    ( f1, f2, f3) where").unwrap(),
-                "M1.M2"
-            );
+            test_module("module M1.M2\n    ( f1, f2, f3) where", "M1.M2");
         }
 
         #[test]
         fn extension() {
-            assert_eq!(
-                module_name(
-                    "{-# LANGUAGE LambdaCase #-}\n\
-                     {-# LANGUAGE TupleSections #-}\n\
-                     module M1.M2 where"
-                )
-                .unwrap(),
-                "M1.M2"
+            test_module(
+                "{-# LANGUAGE LambdaCase #-}\n\
+                {-# LANGUAGE TupleSections #-}\n\
+                module M1.M2 where",
+                "M1.M2",
+            )
+        }
+
+        #[test]
+        fn comment() {
+            test_module(
+                "-- comment\n\
+                module M1.M2 where",
+                "M1.M2",
             )
         }
     }
