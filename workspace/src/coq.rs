@@ -11,7 +11,7 @@ pub struct Coq {
     fixture: String,
 }
 
-const CODE_FILE: &str = "Challenge.v";
+const CODE_FILE: &str = "Solution.v";
 const FIXTURE_FILE: &str = "Test.v";
 
 impl Coq {
