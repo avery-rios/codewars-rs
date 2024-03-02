@@ -144,6 +144,13 @@ struct SaveOpt {
     tag: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Subcommand)]
+enum CleanCmd {
+    Build,
+    Session,
+    All,
+}
+
 #[derive(Debug, Subcommand)]
 enum SessionCmd {
     /// show session info
@@ -152,7 +159,10 @@ enum SessionCmd {
     Test,
     Attempt,
     Submit,
-    Clean,
+    Clean {
+        #[command(subcommand)]
+        cmd: CleanCmd,
+    },
     /// save solution code
     Save(SaveOpt),
     /// back to last menu
@@ -169,10 +179,25 @@ fn show_session(kata: &KataId, session: &Session<'_, '_, '_>) {
 
 mod result;
 
-fn clean(workspace: &dyn WorkspaceObject) -> Result<()> {
-    workspace.clean().context("failed to clean workspace")?;
-    let session_file = workspace.root().join(SESSION_FILE);
-    fs::remove_file(session_file).context("failed to remove session file")
+fn clean(cmd: CleanCmd, workspace: &dyn WorkspaceObject) -> Result<()> {
+    fn clean_session(workspace: &dyn WorkspaceObject) -> Result<()> {
+        workspace
+            .clean_session()
+            .context("failed to clean session workspace")?;
+        let session_file = workspace.root().join(SESSION_FILE);
+        fs::remove_file(session_file).context("failed to remove session file")
+    }
+
+    match cmd {
+        CleanCmd::Build => workspace.clean_build().context("failed to clean build"),
+        CleanCmd::Session => clean_session(workspace),
+        CleanCmd::All => {
+            workspace
+                .clean_build()
+                .context("failed to clean build result")?;
+            clean_session(workspace)
+        }
+    }
 }
 
 fn get_kata_path(env: &CmdEnv, cmd_state: &mut CmdState, kata: &KataId) -> Result<PathBuf> {
@@ -303,8 +328,8 @@ fn session_cmd(
                     print_err(anyhow::Error::new(e))
                 }
             }
-            SessionCmd::Clean => {
-                if let Err(e) = clean(workspace) {
+            SessionCmd::Clean { cmd } => {
+                if let Err(e) = clean(cmd, workspace) {
                     print_err(e)
                 }
             }

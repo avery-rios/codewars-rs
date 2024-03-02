@@ -1,5 +1,7 @@
 use std::{error, io, path::Path};
 
+mod util;
+
 pub struct Code {
     pub solution: String,
     pub fixture: String,
@@ -11,7 +13,8 @@ where
 {
     fn root(&self) -> &Path;
     fn get_code(&self) -> Result<Code, E>;
-    fn clean(&self) -> Result<(), E>;
+    fn clean_build(&self) -> Result<(), E>;
+    fn clean_session(&self) -> Result<(), E>;
 }
 
 pub mod rust;

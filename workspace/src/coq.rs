@@ -1,8 +1,9 @@
-use crate::{Code, WorkspaceObject};
 use std::{
     fs, io,
     path::{Path, PathBuf},
 };
+
+use crate::{util::call_command_in, Code, WorkspaceObject};
 
 pub struct Coq {
     root: PathBuf,
@@ -58,7 +59,10 @@ impl WorkspaceObject for Coq {
             fixture: self.fixture.clone(),
         })
     }
-    fn clean(&self) -> Result<(), io::Error> {
+    fn clean_build(&self) -> Result<(), io::Error> {
+        call_command_in(&self.root, "make", ["clean"])
+    }
+    fn clean_session(&self) -> Result<(), io::Error> {
         Ok(())
     }
 }

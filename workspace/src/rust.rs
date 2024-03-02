@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{Code, WorkspaceObject};
+use crate::{util::call_command_in, Code, WorkspaceObject};
 
 macro_rules! crate_name {
     () => {
@@ -103,7 +103,10 @@ impl WorkspaceObject for Rust {
             fixture: fs::read_to_string(&self.example_test_path)?,
         })
     }
-    fn clean(&self) -> Result<(), io::Error> {
+    fn clean_build(&self) -> Result<(), io::Error> {
+        call_command_in(&self.root, "cargo", ["clean"])
+    }
+    fn clean_session(&self) -> Result<(), io::Error> {
         let mut tmp = self.root.join(".cargo");
         if tmp.exists() {
             fs::remove_dir_all(&tmp)?;

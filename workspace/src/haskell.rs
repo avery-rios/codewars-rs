@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{Code, WorkspaceObject};
+use crate::{util::call_command_in, Code, WorkspaceObject};
 
 const STATE_FILE: &str = "haskell_state.json";
 
@@ -184,7 +184,10 @@ impl WorkspaceObject for Haskell {
             fixture: fs::read_to_string(&self.fixture_path)?,
         })
     }
-    fn clean(&self) -> Result<(), io::Error> {
+    fn clean_build(&self) -> Result<(), io::Error> {
+        call_command_in(&self.root, "cabal", ["clean"])
+    }
+    fn clean_session(&self) -> Result<(), io::Error> {
         let mut path = self.root.clone();
 
         path.push(STATE_FILE);
