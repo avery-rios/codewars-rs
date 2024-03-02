@@ -22,6 +22,8 @@ mod rank;
 
 mod user;
 
+mod file_list;
+
 #[derive(Subcommand)]
 enum KataCmd {
     /// Get kata information
@@ -155,6 +157,9 @@ struct Cli {
     session_id: Option<String>,
     #[arg(long, env = "CW_USER_TOKEN")]
     user_token: Option<String>,
+    /// file list options
+    #[arg(long, env = "CW_LIST_OPTIONS")]
+    list_option: Option<String>,
     #[arg(long, default_value = ".")]
     root: String,
     #[arg(long)]
@@ -190,6 +195,12 @@ fn main() -> Result<()> {
                 )
             } else {
                 None
+            },
+            list_option: match cli.list_option {
+                Some(o) => {
+                    file_list::Options::parse(&o).context("failed to parse file list options")?
+                }
+                None => file_list::Options::default(),
             },
             runtime,
         }

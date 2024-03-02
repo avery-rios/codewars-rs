@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use clap::Subcommand;
+use clap::{Args, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::btree_map,
@@ -13,7 +13,7 @@ use codewars_workspace::{self as workspace, WorkspaceObject};
 
 use crate::{
     command::{next_cmd, print_err, CmdEnv, CmdState},
-    kata,
+    file_list, kata,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -133,6 +133,17 @@ pub fn open_session(env: &CmdEnv, cmd_state: &mut CmdState, path: impl AsRef<Pat
     }
 }
 
+#[derive(Debug, Args)]
+struct SaveOpt {
+    /// no list files
+    #[arg(long)]
+    no_list: bool,
+    #[arg(long, short = 'y')]
+    yes: bool,
+    #[arg(long)]
+    tag: Option<String>,
+}
+
 #[derive(Debug, Subcommand)]
 enum SessionCmd {
     /// show session info
@@ -143,10 +154,7 @@ enum SessionCmd {
     Submit,
     Clean,
     /// save solution code
-    Save {
-        #[arg(long)]
-        tag: Option<String>,
-    },
+    Save(SaveOpt),
     /// back to last menu
     Back,
 }
@@ -167,16 +175,9 @@ fn clean(workspace: &dyn WorkspaceObject) -> Result<()> {
     fs::remove_file(session_file).context("failed to remove session file")
 }
 
-fn save(
-    env: &CmdEnv,
-    cmd_state: &mut CmdState,
-    kata: &KataId,
-    lang: KnownLangId,
-    tag: Option<String>,
-    workspace: &dyn WorkspaceObject,
-) -> Result<()> {
-    let mut kata_dir = match cmd_state.index_mut().kata.entry(kata.to_owned()) {
-        btree_map::Entry::Occupied(o) => Path::new(&env.root).join(&o.get().path),
+fn get_kata_path(env: &CmdEnv, cmd_state: &mut CmdState, kata: &KataId) -> Result<PathBuf> {
+    match cmd_state.index_mut().kata.entry(kata.to_owned()) {
+        btree_map::Entry::Occupied(o) => Ok(Path::new(&env.root).join(&o.get().path)),
         btree_map::Entry::Vacant(v) => {
             println!("Getting kata {}", kata);
 
@@ -208,14 +209,41 @@ fn save(
             .context("failed to save kata info")?;
             v.insert(entry);
             cmd_state.index_dirty = true;
-            path
+            Ok(path)
         }
-    };
-    match tag {
+    }
+}
+
+fn save(
+    env: &CmdEnv,
+    cmd_state: &mut CmdState,
+    kata: &KataId,
+    lang: KnownLangId,
+    opt: SaveOpt,
+    workspace: &dyn WorkspaceObject,
+) -> Result<()> {
+    let mut kata_dir = get_kata_path(env, cmd_state, kata)?;
+    match opt.tag {
         Some(t) => kata_dir.push(format!("{}-{}", lang, t)),
         None => kata_dir.push(lang.as_str()),
     }
-    println!("Solution saved to {}", kata_dir.display());
+    println!("Solution will be saved to {}", kata_dir.display());
+
+    if !opt.no_list {
+        println!("Files will be saved:");
+        file_list::list_dir(&env.list_option, workspace.root().to_path_buf())
+            .context("failed to list workspace dir")?;
+    }
+    if !(opt.yes
+        || dialoguer::Confirm::new()
+            .with_prompt("Save solution? ")
+            .interact()
+            .context("failed to read select")?)
+    {
+        println!("Canceled solution saving");
+        return Ok(());
+    }
+
     fs_extra::dir::copy(
         workspace.root(),
         kata_dir,
@@ -224,6 +252,7 @@ fn save(
             .copy_inside(true),
     )
     .context("failed to copy dir")?;
+    println!("Solution saved");
     Ok(())
 }
 
@@ -278,8 +307,8 @@ fn session_cmd(
                     print_err(e)
                 }
             }
-            SessionCmd::Save { tag } => {
-                if let Err(e) = save(env, state, kata, lang, tag, workspace) {
+            SessionCmd::Save(opt) => {
+                if let Err(e) = save(env, state, kata, lang, opt, workspace) {
                     print_err(e)
                 }
             }

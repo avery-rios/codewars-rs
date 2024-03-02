@@ -3,6 +3,8 @@ use clap::{FromArgMatches, Subcommand};
 use rustyline::Editor;
 use std::path::PathBuf;
 
+use crate::file_list;
+
 pub type LineEditor = Editor<(), rustyline::history::MemHistory>;
 
 pub fn new_editor() -> rustyline::Result<LineEditor> {
@@ -47,6 +49,7 @@ pub struct CmdEnv {
     pub runtime: tokio::runtime::Runtime,
     pub api_client: codewars_api::Client,
     pub unofficial_client: Option<codewars_unofficial::Client>,
+    pub list_option: file_list::Options,
 }
 
 pub struct CmdState {
