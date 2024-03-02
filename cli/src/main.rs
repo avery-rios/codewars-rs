@@ -27,17 +27,17 @@ mod file_list;
 #[derive(Subcommand)]
 enum KataCmd {
     /// Get kata information
-    Get { id: KataId },
-    Train {
-        #[arg(long)]
+    Get {
         id: KataId,
-        #[arg(long)]
+    },
+    Train {
+        id: KataId,
         lang: KnownLangId,
     },
     /// Suggest kata
     Suggest {
-        #[arg(long)]
         lang: KnownLangId,
+        strategy: Option<suggest::Strategy>,
     },
 }
 impl KataCmd {
@@ -54,7 +54,9 @@ impl KataCmd {
                 Ok(())
             }
             Self::Train { id, lang } => session::start_session(env, state, id, lang),
-            Self::Suggest { lang } => suggest::start_suggest(env, state, lang),
+            Self::Suggest { lang, strategy } => {
+                suggest::start_suggest(env, state, lang, strategy.unwrap_or_default())
+            }
         }
     }
 }

@@ -9,7 +9,12 @@ use crate::{
     session,
 };
 
-pub fn start_suggest(env: &CmdEnv, state: &mut CmdState, lang: KnownLangId) -> Result<()> {
+pub fn start_suggest(
+    env: &CmdEnv,
+    state: &mut CmdState,
+    lang: KnownLangId,
+    strategy: Strategy,
+) -> Result<()> {
     let client = env.unofficial_client.as_ref().context("Login required")?;
     suggest_cmd(
         env,
@@ -18,7 +23,7 @@ pub fn start_suggest(env: &CmdEnv, state: &mut CmdState, lang: KnownLangId) -> R
             .block_on(client.suggest_kata())
             .context("failed to start suggestion")?,
         lang,
-        SuggestStrategy::RankUp,
+        strategy,
     )
 }
 
@@ -36,13 +41,25 @@ fn to_prompt(lang: KnownLangId, strategy: SuggestStrategy) -> String {
     )
 }
 
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
-enum Strategy {
+#[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
+pub enum Strategy {
     Fundamental,
+    #[default]
     RankUp,
     Practice,
     Random,
     Beta,
+}
+impl From<Strategy> for SuggestStrategy {
+    fn from(value: Strategy) -> Self {
+        match value {
+            Strategy::Fundamental => SuggestStrategy::Fundamental,
+            Strategy::RankUp => SuggestStrategy::RankUp,
+            Strategy::Practice => SuggestStrategy::Practice,
+            Strategy::Beta => SuggestStrategy::Beta,
+            Strategy::Random => SuggestStrategy::Random,
+        }
+    }
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -83,8 +100,9 @@ fn suggest_cmd(
     state: &mut CmdState,
     suggest: Suggest<'_>,
     mut lang: KnownLangId,
-    mut strategy: SuggestStrategy,
+    strategy: Strategy,
 ) -> Result<()> {
+    let mut strategy = strategy.into();
     let mut prompt = to_prompt(lang, strategy);
     let mut current = env
         .runtime
@@ -111,13 +129,7 @@ fn suggest_cmd(
                     lang = l;
                 }
                 if let Some(s) = opt_str {
-                    strategy = match s {
-                        Strategy::Fundamental => SuggestStrategy::Fundamental,
-                        Strategy::RankUp => SuggestStrategy::RankUp,
-                        Strategy::Practice => SuggestStrategy::Practice,
-                        Strategy::Beta => SuggestStrategy::Beta,
-                        Strategy::Random => SuggestStrategy::Random,
-                    };
+                    strategy = s.into();
                 }
                 prompt = to_prompt(lang, strategy);
             }
