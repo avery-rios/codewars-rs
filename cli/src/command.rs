@@ -53,14 +53,12 @@ pub struct CmdEnv {
 }
 
 pub struct CmdState {
-    pub editor: LineEditor,
     index: codewars_solution::index::Index,
     pub index_dirty: bool,
 }
 impl CmdState {
-    pub fn new(editor: LineEditor, index: codewars_solution::index::Index) -> Self {
+    pub fn new(index: codewars_solution::index::Index) -> Self {
         Self {
-            editor,
             index,
             index_dirty: false,
         }

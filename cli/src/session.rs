@@ -12,7 +12,7 @@ use codewars_unofficial::project::{self, ProjectInfo, Session, SessionInfo};
 use codewars_workspace::{self as workspace, WorkspaceObject};
 
 use crate::{
-    command::{next_cmd, print_err, CmdEnv, CmdState},
+    command::{new_editor, next_cmd, print_err, CmdEnv, CmdState},
     file_list, kata,
 };
 
@@ -268,8 +268,9 @@ fn session_cmd(
         "kata {} ({} {})> ",
         kata, &session.info.language_name, &session.info.active_version
     );
+    let mut editor = new_editor().context("failed to create editor")?;
     loop {
-        match next_cmd::<SessionCmd>(&prompt, &mut state.editor) {
+        match next_cmd::<SessionCmd>(&prompt, &mut editor) {
             SessionCmd::Show => show_session(kata, &session),
             SessionCmd::Test => {
                 match workspace

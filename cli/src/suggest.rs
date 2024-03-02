@@ -4,7 +4,7 @@ use codewars_types::KnownLangId;
 use codewars_unofficial::suggest::{Suggest, SuggestStrategy, SuggestedKata};
 
 use crate::{
-    command::{next_cmd, print_err, CmdEnv, CmdState},
+    command::{new_editor, next_cmd, print_err, CmdEnv, CmdState},
     rank::ShowKataRank,
     session,
 };
@@ -91,8 +91,9 @@ fn suggest_cmd(
         .block_on(suggest.suggest(lang, strategy, false))
         .context("failed to get suggestion")?;
     show_suggestion(&current);
+    let mut editor = new_editor().context("failed to create editor")?;
     loop {
-        match next_cmd::<SuggestCmd>(&prompt, &mut state.editor) {
+        match next_cmd::<SuggestCmd>(&prompt, &mut editor) {
             SuggestCmd::Next { skip } => {
                 match env.runtime.block_on(suggest.suggest(lang, strategy, skip)) {
                     Ok(n) => {

@@ -205,14 +205,11 @@ fn main() -> Result<()> {
             runtime,
         }
     };
-    let mut state = CmdState::new(
-        command::new_editor().context("failed to create line editor")?,
-        if env.index_path.exists() {
-            index::Index::open(&env.index_path).context("failed to open index")?
-        } else {
-            index::Index::new()
-        },
-    );
+    let mut state = CmdState::new(if env.index_path.exists() {
+        index::Index::open(&env.index_path).context("failed to open index")?
+    } else {
+        index::Index::new()
+    });
     match cli.command {
         Some(c) => {
             if let Err(e) = c.run(&env, &mut state) {
@@ -224,13 +221,16 @@ fn main() -> Result<()> {
                 }
             }
         }
-        None => loop {
-            match next_cmd::<Command>("codewars> ", &mut state.editor).run(&env, &mut state) {
-                Ok(true) => (),
-                Ok(false) => break,
-                Err(e) => print_err(e),
+        None => {
+            let mut editor = command::new_editor().context("failed to create line editor")?;
+            loop {
+                match next_cmd::<Command>("codewars> ", &mut editor).run(&env, &mut state) {
+                    Ok(true) => (),
+                    Ok(false) => break,
+                    Err(e) => print_err(e),
+                }
             }
-        },
+        }
     }
     Ok(())
 }
