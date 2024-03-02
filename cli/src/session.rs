@@ -62,8 +62,15 @@ pub fn start_session(
     let session = Session::from_project(client, &ses_state.project, &ses_state.session);
     match lang {
         KnownLangId::Coq => {
+            let has_preloaded = dialoguer::Confirm::new()
+                .with_prompt("Has preloaded code? ")
+                .default(true)
+                .show_default(true)
+                .interact()
+                .context("failed to prompt if there is preloaded code")?;
             let ws = workspace::Coq::create(
                 create_workspace_dir(env, &ses_state, "coq")?,
+                has_preloaded,
                 &session.info.setup,
                 &session.info.example_fixture,
             )

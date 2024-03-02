@@ -11,11 +11,29 @@ pub struct Coq {
     fixture: String,
 }
 
-const CODE_FILE: &str = "Solution.v";
-const FIXTURE_FILE: &str = "Test.v";
+macro_rules! file_name {
+    (preloaded) => {
+        "Preloaded.v"
+    };
+    (code) => {
+        "Solution.v"
+    };
+    (sample) => {
+        "Test.v"
+    };
+}
+
+const PRELOADED_FILE: &str = file_name!(preloaded);
+const CODE_FILE: &str = file_name!(code);
+const FIXTURE_FILE: &str = file_name!(sample);
 
 impl Coq {
-    pub fn create(mut root: PathBuf, code: &str, test: &str) -> io::Result<Self> {
+    pub fn create(
+        mut root: PathBuf,
+        has_preloaded: bool,
+        code: &str,
+        test: &str,
+    ) -> io::Result<Self> {
         let code_path = root.join(CODE_FILE);
         fs::write(&code_path, code)?;
 
@@ -30,9 +48,22 @@ impl Coq {
         root.push("Makefile");
         fs::write(
             &root,
-            format!(include_str!("./coq/Makefile"), files = CODE_FILE),
+            format!(
+                include_str!("./coq/Makefile"),
+                files = if has_preloaded {
+                    concat!(file_name!(preloaded), " ", file_name!(code))
+                } else {
+                    CODE_FILE
+                }
+            ),
         )?;
         root.pop();
+
+        if has_preloaded {
+            root.push(PRELOADED_FILE);
+            fs::File::options().write(true).create(true).open(&root)?;
+            root.pop();
+        }
 
         Ok(Self {
             root,
