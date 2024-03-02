@@ -56,6 +56,9 @@ pub enum Output {
     Failed {
         v: String,
     },
+    Log {
+        v: String,
+    },
     Error {
         v: String,
     },

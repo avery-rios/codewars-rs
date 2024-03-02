@@ -34,6 +34,7 @@ fn show_output(output: &Output, prefix: u8, f: &mut fmt::Formatter<'_>) -> fmt::
         Output::Passed { v } => {
             write!(f, "{}", Paint::green(format_args!("✔ {}", v)))
         }
+        Output::Log { .. } => Ok(()),
         Output::Error { v } => {
             write!(f, "{}", Paint::red(format_args!("✘ {}", v)))
         }
