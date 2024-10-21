@@ -1,14 +1,17 @@
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
+use std::{ffi::CStr, io, path::Path};
+
+use rustix::{
+    fd::{AsFd, OwnedFd},
+    fs::{Mode, OFlags},
 };
 
-use crate::{util::call_command_in, Code, WorkspaceObject};
+use crate::{
+    util::{call_command_at, fs},
+    Code, WorkspaceObject,
+};
 
 pub struct Coq {
-    root: PathBuf,
-    code_path: PathBuf,
-    fixture: String,
+    root: OwnedFd,
 }
 
 macro_rules! file_name {
@@ -23,79 +26,61 @@ macro_rules! file_name {
     };
 }
 
-const PRELOADED_FILE: &str = file_name!(preloaded);
-const CODE_FILE: &str = file_name!(code);
-const FIXTURE_FILE: &str = file_name!(sample);
+const PRELOADED_FILE: &CStr = c"Preloaded.v";
+const CODE_FILE: &CStr = c"Solution.v";
+const FIXTURE_FILE: &CStr = c"Test.v";
 
 impl Coq {
-    pub fn create(
-        mut root: PathBuf,
-        has_preloaded: bool,
-        code: &str,
-        test: &str,
-    ) -> io::Result<Self> {
-        let code_path = root.join(CODE_FILE);
-        fs::write(&code_path, code)?;
+    pub fn create(root: &Path, has_preloaded: bool, code: &str, test: &str) -> io::Result<Self> {
+        let root = fs::open_dirfd(root)?;
 
-        root.push(FIXTURE_FILE);
-        fs::write(&root, test)?;
-        root.pop();
-
-        root.push("_CoqProject");
-        fs::write(&root, include_str!("./coq/_CoqProject"))?;
-        root.pop();
-
-        root.push("Makefile");
+        fs::write(root.as_fd(), CODE_FILE, code)?;
+        fs::write(root.as_fd(), FIXTURE_FILE, test)?;
         fs::write(
-            &root,
+            root.as_fd(),
+            c"_CoqProject",
+            include_str!("./coq/_CoqProject"),
+        )?;
+        fs::write(
+            root.as_fd(),
+            c"Makefile",
             format!(
                 include_str!("./coq/Makefile"),
                 files = if has_preloaded {
                     concat!(file_name!(preloaded), " ", file_name!(code))
                 } else {
-                    CODE_FILE
+                    file_name!(code)
                 }
             ),
         )?;
-        root.pop();
 
         if has_preloaded {
-            root.push(PRELOADED_FILE);
-            fs::File::options()
-                .write(true)
-                .create(true)
-                .truncate(false)
-                .open(&root)?;
-            root.pop();
+            // create empty file
+            rustix::fs::openat(
+                root.as_fd(),
+                PRELOADED_FILE,
+                OFlags::CREATE | OFlags::CLOEXEC,
+                Mode::from_raw_mode(0o666),
+            )?;
         }
 
-        Ok(Self {
-            root,
-            code_path,
-            fixture: test.to_string(),
-        })
+        Ok(Self { root })
     }
     pub fn open(root: impl AsRef<Path>) -> io::Result<Self> {
-        let root = root.as_ref();
         Ok(Self {
-            root: root.to_path_buf(),
-            code_path: root.join(CODE_FILE),
-            fixture: fs::read_to_string(root.join(FIXTURE_FILE))?,
+            root: fs::open_dirfd(root.as_ref())?,
         })
     }
 }
 impl WorkspaceObject for Coq {
-    fn root(&self) -> &Path {
-        self.root.as_path()
-    }
     fn get_code(&self) -> Result<crate::Code, io::Error> {
         Ok(Code {
-            solution: fs::read_to_string(&self.code_path)?,
-            fixture: self.fixture.clone(),
+            solution: fs::read_to_string(self.root.as_fd(), CODE_FILE)?,
+            fixture: fs::read_to_string(self.root.as_fd(), FIXTURE_FILE)?,
         })
     }
     fn clean_build(&self) -> Result<(), io::Error> {
-        call_command_in(&self.root, "make", ["clean"])
+        call_command_at(self.root.as_fd(), "make", ["clean"])
     }
     fn clean_session(&self) -> Result<(), io::Error> {
         Ok(())

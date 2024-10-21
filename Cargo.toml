@@ -9,6 +9,9 @@ members = [
 ]
 resolver = "2"
 
+[workspace.dependencies]
+rustix = { version = "0.38.37", features = ["fs"] }
+
 [profile.release-lto]
 inherits = "release"
 lto = true

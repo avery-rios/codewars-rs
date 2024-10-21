@@ -1,12 +1,21 @@
-use serde::{Deserialize, Serialize};
 use std::{
-    fs, io,
-    path::{Path, PathBuf},
+    ffi::{CStr, CString},
+    io,
+    path::Path,
 };
 
-use crate::{util::call_command_in, Code, WorkspaceObject};
+use rustix::{
+    fd::{AsFd, BorrowedFd, OwnedFd},
+    io::Errno,
+};
+use serde::{Deserialize, Serialize};
 
-const STATE_FILE: &str = "haskell_state.json";
+use crate::{
+    util::{call_command_at, fs},
+    Code, WorkspaceObject,
+};
+
+const STATE_FILE: &CStr = c"haskell_state.json";
 
 /// get haskell module name
 fn module_name(src: &str) -> Option<&str> {
@@ -28,15 +37,15 @@ fn module_name(src: &str) -> Option<&str> {
 }
 
 #[derive(Serialize, Deserialize)]
-struct State<'a> {
-    code_path: &'a str,
-    fixture_path: &'a str,
+struct State {
+    code_path: CString,
+    fixture_path: CString,
 }
 
 #[derive(Debug, thiserror::Error)]
 enum OpenErrInner {
     #[error("failed to open state")]
-    Io(#[source] io::Error),
+    Io(#[source] Errno),
     #[error("failed to deserialize json")]
     Json(#[source] serde_json::Error),
 }
@@ -51,8 +60,10 @@ enum CreateErrorInner {
     UnknownCode(String),
     #[error("unknown test {0}")]
     UnknownTest(String),
-    #[error("failed to write file")]
-    Write(#[source] io::Error),
+    #[error("failed to write source code")]
+    WriteCode(#[source] io::Error),
+    #[error("io error")]
+    Io(#[source] Errno),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -60,153 +71,109 @@ enum CreateErrorInner {
 pub struct CreateError(#[from] CreateErrorInner);
 
 pub struct Haskell {
-    root: PathBuf,
-    code_path: PathBuf,
-    fixture_path: PathBuf,
+    root: OwnedFd,
+    state: State,
 }
 
 impl Haskell {
-    pub fn open(root: impl AsRef<Path>) -> Result<Self, OpenError> {
-        let mut root = root.as_ref().to_path_buf();
-
-        root.push(STATE_FILE);
-        let stat_str = fs::read(&root).map_err(OpenErrInner::Io)?;
-        root.pop();
-
-        let stat: State<'_> = serde_json::from_slice(&stat_str).map_err(OpenErrInner::Json)?;
+    pub fn open(root: &Path) -> Result<Self, OpenError> {
+        let root = fs::open_dirfd(root).map_err(OpenErrInner::Io)?;
         Ok(Self {
-            code_path: root.join(stat.code_path),
-            fixture_path: root.join(stat.fixture_path),
+            state: serde_json::from_slice(
+                &fs::read(root.as_fd(), STATE_FILE).map_err(OpenErrInner::Io)?,
+            )
+            .map_err(OpenErrInner::Json)?,
             root,
         })
     }
-    pub fn create(root: impl AsRef<Path>, code: &str, test: &str) -> Result<Self, CreateError> {
+    pub fn create(root: &Path, code: &str, test: &str) -> Result<Self, CreateError> {
         fn write_code(
-            root: &Path,
-            base: &str,
+            root: BorrowedFd,
+            base: String,
             module: &str,
             code: &str,
-        ) -> Result<(String, PathBuf), io::Error> {
-            let mut rel_path = String::new();
-            rel_path.push_str(base);
+        ) -> Result<CString, io::Error> {
+            let mut rel_path = base;
             for m in module.split('.') {
                 rel_path.push('/');
                 rel_path.push_str(m);
             }
             rel_path.push_str(".hs");
 
-            let path = root.join(&rel_path);
-            fs::create_dir_all(path.parent().unwrap())?;
-            fs::write(&path, code)?;
-            Ok((rel_path, path))
+            fs::mkdir_all_at(root, Path::new(rel_path.as_str()).parent().unwrap())?;
+            let path = CString::new(rel_path)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+            fs::write(root, &path, code)?;
+            Ok(path)
         }
-        let root = root.as_ref();
-        let mut path = root.to_path_buf();
+        let root = fs::open_dirfd(root).map_err(CreateErrorInner::Io)?;
 
         let code_mod =
             module_name(code).ok_or_else(|| CreateErrorInner::UnknownCode(code.to_string()))?;
-        let (code_path_rel, code_path) =
-            write_code(root, "src", code_mod, code).map_err(CreateErrorInner::Write)?;
+        let code_path = write_code(root.as_fd(), "src".into(), code_mod, code)
+            .map_err(CreateErrorInner::WriteCode)?;
 
         let test_mod =
             module_name(test).ok_or_else(|| CreateErrorInner::UnknownTest(test.to_string()))?;
-        let (test_path_rel, test_path) =
-            write_code(root, "test/sample", test_mod, test).map_err(CreateErrorInner::Write)?;
-        {
-            path.push("test/sample/Main.hs");
-            fs::write(
-                &path,
-                format!(
-                    "module Main (main) where\n\
-                     \n\
-                     import Test.Hspec\n\
-                     import {} (spec)\n\
-                     \n\
-                     main :: IO ()\n\
-                     main = hspec spec",
-                    test_mod
-                ),
-            )
-            .map_err(CreateErrorInner::Write)?;
-            path.pop();
-            path.pop();
-            path.pop();
-        }
+        let test_path = write_code(root.as_fd(), "test/sample".into(), test_mod, test)
+            .map_err(CreateErrorInner::WriteCode)?;
 
-        {
-            path.push(STATE_FILE);
-            fs::write(
-                &path,
-                serde_json::to_vec(&State {
-                    code_path: &code_path_rel,
-                    fixture_path: &test_path_rel,
-                })
-                .unwrap(),
-            )
-            .map_err(CreateErrorInner::Write)?;
-            path.pop();
-        }
+        fs::write(
+            root.as_fd(),
+            c"test/sample/Main.hs",
+            format!(
+                include_str!("./haskell/Test_Main.hs",),
+                test_module = test_mod
+            ),
+        )
+        .map_err(CreateErrorInner::Io)?;
 
-        {
-            path.push("challenge.cabal");
-            fs::write(
-                &path,
-                format!(
-                    include_str!("./haskell/challenge.cabal"),
-                    code_module = code_mod,
-                    test_module = test_mod
-                ),
-            )
-            .map_err(CreateErrorInner::Write)?;
-            path.pop();
-        }
-
-        {
-            path.push("cabal.project.local");
-            fs::write(&path, include_str!("./haskell/cabal.project.local.in"))
-                .map_err(CreateErrorInner::Write)?;
-        }
-
-        Ok(Self {
-            root: root.to_path_buf(),
+        let state = State {
             code_path,
             fixture_path: test_path,
-        })
+        };
+        fs::write(
+            root.as_fd(),
+            STATE_FILE,
+            serde_json::to_vec(&state).unwrap(),
+        )
+        .map_err(CreateErrorInner::Io)?;
+
+        fs::write(
+            root.as_fd(),
+            c"challenge.cabal",
+            format!(
+                include_str!("./haskell/challenge.cabal"),
+                code_module = code_mod,
+                test_module = test_mod
+            ),
+        )
+        .map_err(CreateErrorInner::Io)?;
+
+        fs::write(
+            root.as_fd(),
+            c"cabal.project.local",
+            include_str!("./haskell/cabal.project.local.in"),
+        )
+        .map_err(CreateErrorInner::Io)?;
+
+        Ok(Self { root, state })
     }
 }
 impl WorkspaceObject for Haskell {
-    fn root(&self) -> &Path {
-        self.root.as_path()
-    }
     fn get_code(&self) -> Result<Code, io::Error> {
         Ok(Code {
-            solution: fs::read_to_string(&self.code_path)?,
-            fixture: fs::read_to_string(&self.fixture_path)?,
+            solution: fs::read_to_string(self.root.as_fd(), &self.state.code_path)?,
+            fixture: fs::read_to_string(self.root.as_fd(), &self.state.fixture_path)?,
         })
     }
     fn clean_build(&self) -> Result<(), io::Error> {
-        call_command_in(&self.root, "cabal", ["clean"])
+        call_command_at(self.root.as_fd(), "cabal", ["clean"])
     }
     fn clean_session(&self) -> Result<(), io::Error> {
-        let mut path = self.root.clone();
-
-        path.push(STATE_FILE);
-        if path.exists() {
-            fs::remove_file(&path)?;
-        }
-        path.pop();
-
-        path.push("cabal.project.local");
-        if path.exists() {
-            fs::remove_file(&path)?;
-        }
-        path.pop();
-
-        path.push("cabal.project.local~");
-        if path.exists() {
-            fs::remove_file(&path)?;
-        }
-
+        fs::remove_at(self.root.as_fd(), STATE_FILE)?;
+        fs::remove_at(self.root.as_fd(), c"cabal.project.local")?;
+        fs::remove_at(self.root.as_fd(), c"cabal.project.local~")?;
         Ok(())
     }
 }

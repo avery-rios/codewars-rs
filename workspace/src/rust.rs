@@ -1,9 +1,14 @@
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
+use std::{ffi::CStr, io, path::Path};
+
+use rustix::{
+    fd::{AsFd, OwnedFd},
+    io::Errno,
 };
 
-use crate::{util::call_command_in, Code, WorkspaceObject};
+use crate::{
+    util::{call_command_at, fs},
+    Code, WorkspaceObject,
+};
 
 macro_rules! crate_name {
     () => {
@@ -23,100 +28,71 @@ const CARGO_1_62: &str = concat!(
     "default = [\"local\"]"
 );
 
-const CARGO_CONFIG: &str = include_str!("./rust/profile.toml");
-
 const CRATE_NAME: &str = crate_name!();
-
-fn proc_test(input: &str) -> String {
-    format!(
-        "#[cfg(feature = \"local\")]\nuse {}::*;\n\n{}",
-        CRATE_NAME, input
-    )
-}
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
-pub struct CreateError(#[from] io::Error);
+pub struct Error(#[from] Errno);
 
 pub struct Rust {
-    root: PathBuf,
-    code_path: PathBuf,
-    example_test_path: PathBuf,
+    root: OwnedFd,
 }
+const CODE_PATH: &CStr = c"src/lib.rs";
+const TEST_PATH: &CStr = c"tests/sample.rs";
+
 impl Rust {
     pub const VERSION: &'static str = "1.62";
 
-    pub fn open(root: PathBuf) -> Self {
-        Self {
-            code_path: root.join("src/lib.rs"),
-            example_test_path: root.join("tests/sample.rs"),
-            root,
-        }
+    pub fn open(root: &Path) -> Result<Self, Error> {
+        Ok(Self {
+            root: fs::open_dirfd(root)?,
+        })
     }
 
-    pub fn create(root: impl AsRef<Path>, code: &str, test: &str) -> Result<Self, CreateError> {
-        let root = root.as_ref();
-        let code_path = {
-            let mut dir = root.join("src");
-            fs::create_dir_all(&dir)?;
-            dir.push("lib.rs");
-            dir
-        };
-        fs::write(&code_path, code)?;
+    pub fn create(root: impl AsRef<Path>, code: &str, test: &str) -> Result<Self, Error> {
+        let root = fs::open_dirfd(root.as_ref())?;
 
-        let example_test_path = {
-            let mut dir = root.join("tests");
-            fs::create_dir(&dir)?;
-            dir.push("sample.rs");
-            dir
-        };
-        fs::write(&example_test_path, proc_test(test))?;
+        fs::mkdirat(root.as_fd(), c"src")?;
+        fs::write(root.as_fd(), CODE_PATH, code)?;
 
-        let mut tmp = root.to_path_buf();
+        fs::mkdirat(root.as_fd(), c"tests")?;
+        fs::write(
+            root.as_fd(),
+            TEST_PATH,
+            format!(
+                "#[cfg(feature = \"local\")]\n\
+                use {CRATE_NAME}::*;\n\
+                \n\
+                {test}"
+            ),
+        )?;
 
-        tmp.push(".cargo");
-        fs::create_dir(&tmp)?;
-        tmp.push("config.toml");
-        fs::write(&tmp, CARGO_CONFIG)?;
-        tmp.pop();
-        tmp.pop();
+        fs::mkdirat(root.as_fd(), c".cargo")?;
+        fs::write(
+            root.as_fd(),
+            c".cargo/config.toml",
+            include_str!("./rust/profile.toml"),
+        )?;
 
-        tmp.push("Cargo.toml");
-        fs::write(&tmp, CARGO_1_62)?;
-        tmp.pop();
+        fs::write(root.as_fd(), c"Cargo.toml", CARGO_1_62)?;
 
-        Ok(Self {
-            root: root.to_path_buf(),
-            code_path,
-            example_test_path,
-        })
+        Ok(Self { root })
     }
 }
 
 impl WorkspaceObject for Rust {
-    fn root(&self) -> &Path {
-        &self.root
-    }
     fn get_code(&self) -> Result<Code, io::Error> {
         Ok(Code {
-            solution: fs::read_to_string(&self.code_path)?,
-            fixture: fs::read_to_string(&self.example_test_path)?,
+            solution: fs::read_to_string(self.root.as_fd(), CODE_PATH)?,
+            fixture: fs::read_to_string(self.root.as_fd(), TEST_PATH)?,
         })
     }
     fn clean_build(&self) -> Result<(), io::Error> {
-        call_command_in(&self.root, "cargo", ["clean"])
+        call_command_at(self.root.as_fd(), "cargo", ["clean"])
     }
     fn clean_session(&self) -> Result<(), io::Error> {
-        let mut tmp = self.root.join(".cargo");
-        if tmp.exists() {
-            fs::remove_dir_all(&tmp)?;
-        }
-        tmp.pop();
-
-        tmp.push("Cargo.lock");
-        if tmp.exists() {
-            fs::remove_file(&tmp)?;
-        }
+        fs::remove_dir_all_at(self.root.as_fd(), c".cargo")?;
+        fs::remove_at(self.root.as_fd(), c"Cargo.lock")?;
         Ok(())
     }
 }

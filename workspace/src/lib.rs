@@ -1,4 +1,4 @@
-use std::{error, io, path::Path};
+use std::{error, io};
 
 mod util;
 
@@ -11,7 +11,6 @@ pub trait WorkspaceObject<E = io::Error>
 where
     E: error::Error,
 {
-    fn root(&self) -> &Path;
     fn get_code(&self) -> Result<Code, E>;
     fn clean_build(&self) -> Result<(), E>;
     fn clean_session(&self) -> Result<(), E>;

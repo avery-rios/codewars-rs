@@ -60,6 +60,8 @@ pub fn start_session(
         project,
     };
     let session = Session::from_project(client, &ses_state.project, &ses_state.session);
+    let root = create_workspace_dir(env, &ses_state, lang.as_str())
+        .context("failed to create workspace dir")?;
     match lang {
         KnownLangId::Coq => {
             let has_preloaded = dialoguer::Confirm::new()
@@ -68,14 +70,23 @@ pub fn start_session(
                 .show_default(true)
                 .interact()
                 .context("failed to prompt if there is preloaded code")?;
+
             let ws = workspace::Coq::create(
-                create_workspace_dir(env, &ses_state, "coq")?,
+                &root,
                 has_preloaded,
                 &session.info.setup,
                 &session.info.example_fixture,
             )
             .context("failed to create workspace")?;
-            session_cmd(env, cmd_state, &ses_state.kata_id, lang, session, &ws)
+            session_cmd(
+                env,
+                cmd_state,
+                &ses_state.kata_id,
+                lang,
+                session,
+                root.as_path(),
+                &ws,
+            )
         }
         KnownLangId::Rust => {
             let ws = workspace::Rust::create(
@@ -84,17 +95,32 @@ pub fn start_session(
                 &session.info.example_fixture,
             )
             .context("failed to create workspace")?;
-            session_cmd(env, cmd_state, &ses_state.kata_id, lang, session, &ws)
+            session_cmd(
+                env,
+                cmd_state,
+                &ses_state.kata_id,
+                lang,
+                session,
+                &root,
+                &ws,
+            )
         }
         KnownLangId::Haskell => {
             let ws = workspace::Haskell::create(
-                create_workspace_dir(env, &ses_state, "haskell")
-                    .context("failed to create workspace")?,
+                &root,
                 &session.info.setup,
                 &session.info.example_fixture,
             )
             .context("failed to create workspace")?;
-            session_cmd(env, cmd_state, &ses_state.kata_id, lang, session, &ws)
+            session_cmd(
+                env,
+                cmd_state,
+                &ses_state.kata_id,
+                lang,
+                session,
+                &root,
+                &ws,
+            )
         }
         l => {
             bail!("Unsupported language {}", l)
@@ -109,6 +135,7 @@ pub fn open_session(env: &CmdEnv, cmd_state: &mut CmdState, path: impl AsRef<Pat
     )
     .context("invalid session file")?;
     let session = Session::from_project(client, &state.project, &state.session);
+    let root = path.as_ref();
     match state.language {
         KnownLangId::Coq => session_cmd(
             env,
@@ -116,7 +143,8 @@ pub fn open_session(env: &CmdEnv, cmd_state: &mut CmdState, path: impl AsRef<Pat
             &state.kata_id,
             state.language,
             session,
-            &workspace::Coq::open(path.as_ref()).context("failed to open workspace")?,
+            root,
+            &workspace::Coq::open(root).context("failed to open workspace")?,
         ),
         KnownLangId::Rust => session_cmd(
             env,
@@ -124,7 +152,8 @@ pub fn open_session(env: &CmdEnv, cmd_state: &mut CmdState, path: impl AsRef<Pat
             &state.kata_id,
             state.language,
             session,
-            &workspace::Rust::open(path.as_ref().to_path_buf()),
+            root,
+            &workspace::Rust::open(root).context("failed to open workspace")?,
         ),
         KnownLangId::Haskell => session_cmd(
             env,
@@ -132,7 +161,8 @@ pub fn open_session(env: &CmdEnv, cmd_state: &mut CmdState, path: impl AsRef<Pat
             &state.kata_id,
             state.language,
             session,
-            &workspace::Haskell::open(path.as_ref()).context("failed to open workspace")?,
+            root,
+            &workspace::Haskell::open(root).context("failed to open workspace")?,
         ),
         l => {
             bail!("Unsupported language {}", l)
@@ -186,23 +216,23 @@ fn show_session(kata: &KataId, session: &Session<'_, '_, '_>) {
 
 mod result;
 
-fn clean(cmd: CleanCmd, workspace: &dyn WorkspaceObject) -> Result<()> {
-    fn clean_session(workspace: &dyn WorkspaceObject) -> Result<()> {
+fn clean(cmd: CleanCmd, root: &Path, workspace: &dyn WorkspaceObject) -> Result<()> {
+    fn clean_session(root: &Path, workspace: &dyn WorkspaceObject) -> Result<()> {
         workspace
             .clean_session()
             .context("failed to clean session workspace")?;
-        let session_file = workspace.root().join(SESSION_FILE);
+        let session_file = root.join(SESSION_FILE);
         fs::remove_file(session_file).context("failed to remove session file")
     }
 
     match cmd {
         CleanCmd::Build => workspace.clean_build().context("failed to clean build"),
-        CleanCmd::Session => clean_session(workspace),
+        CleanCmd::Session => clean_session(root, workspace),
         CleanCmd::All => {
             workspace
                 .clean_build()
                 .context("failed to clean build result")?;
-            clean_session(workspace)
+            clean_session(root, workspace)
         }
     }
 }
@@ -252,7 +282,7 @@ fn save(
     kata: &KataId,
     lang: KnownLangId,
     opt: SaveOpt,
-    workspace: &dyn WorkspaceObject,
+    root: &Path,
 ) -> Result<()> {
     let mut kata_dir = get_kata_path(env, cmd_state, kata)?;
     match opt.tag {
@@ -263,7 +293,7 @@ fn save(
 
     if !opt.no_list {
         println!("Files will be saved:");
-        file_list::list_dir(&env.list_option, workspace.root().to_path_buf())
+        file_list::list_dir(&env.list_option, root.to_path_buf())
             .context("failed to list workspace dir")?;
     }
     if !(opt.yes
@@ -277,7 +307,7 @@ fn save(
     }
 
     fs_extra::dir::copy(
-        workspace.root(),
+        root,
         kata_dir,
         &fs_extra::dir::CopyOptions::new()
             .overwrite(false)
@@ -294,6 +324,7 @@ fn session_cmd(
     kata: &KataId,
     lang: KnownLangId,
     session: Session<'_, '_, '_>,
+    root: &Path,
     workspace: &dyn WorkspaceObject,
 ) -> Result<()> {
     let prompt = format!(
@@ -336,12 +367,12 @@ fn session_cmd(
                 }
             }
             SessionCmd::Clean { cmd } => {
-                if let Err(e) = clean(cmd, workspace) {
+                if let Err(e) = clean(cmd, root, workspace) {
                     print_err(e)
                 }
             }
             SessionCmd::Save(opt) => {
-                if let Err(e) = save(env, state, kata, lang, opt, workspace) {
+                if let Err(e) = save(env, state, kata, lang, opt, root) {
                     print_err(e)
                 }
             }
