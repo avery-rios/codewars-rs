@@ -20,7 +20,7 @@ pub fn show_user(u: &User) {
     if let Some(ss) = &u.skills {
         print!("skills:");
         ss.iter().for_each(|s| print!(" {}", s));
-        print!("\n");
+        println!();
     }
 
     fn show_rank<N: Display>(name: N, r: &codewars_api::UserRank) {

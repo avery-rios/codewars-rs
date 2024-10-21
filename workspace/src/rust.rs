@@ -44,7 +44,7 @@ pub struct Rust {
     example_test_path: PathBuf,
 }
 impl Rust {
-    pub const VERSION: &str = "1.62";
+    pub const VERSION: &'static str = "1.62";
 
     pub fn open(root: PathBuf) -> Self {
         Self {

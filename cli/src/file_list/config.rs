@@ -22,6 +22,7 @@ pub fn theme_opt() -> theme::Options {
         use_colours: theme::UseColours::Automatic,
         colour_scale: COLOR_SCALE_OPT,
         definitions: theme::Definitions::default(),
+        theme_config: None,
     }
 }
 
@@ -62,6 +63,7 @@ pub const DETAILS_OPT: details::Options = details::Options {
     secattr: false,
     mounts: false,
     color_scale: COLOR_SCALE_OPT,
+    follow_links: true,
 };
 
 #[inline]
@@ -71,6 +73,7 @@ pub const fn file_name_opt(is_a_tty: bool) -> file_name::Options {
         show_icons: file_name::ShowIcons::Automatic(1),
         quote_style: file_name::QuoteStyle::NoQuotes,
         embed_hyperlinks: file_name::EmbedHyperlinks::Off,
+        absolute: file_name::Absolute::Off,
         is_a_tty,
     }
 }
@@ -82,12 +85,13 @@ pub const GIT_IGNORE: GitIgnore = GitIgnore::Off;
 #[inline]
 pub fn filter() -> filter::FileFilter {
     filter::FileFilter {
-        list_dirs_first: false,
         sort_field: filter::SortField::Name(filter::SortCase::ABCabc),
         flags: Vec::new(),
         dot_filter: DOT_FILTER,
         ignore_patterns: filter::IgnorePatterns::empty(),
         git_ignore: GIT_IGNORE,
+        no_symlinks: false,
+        show_symlinks: true,
     }
 }
 
@@ -114,6 +118,7 @@ pub fn options(is_a_tty: bool) -> options::Options {
             width: TERM_WIDTH,
             file_style: file_name_opt(is_a_tty),
             deref_links: DEREF_LINKS,
+            follow_links: true,
             total_size: TOTAL_SIZE,
         },
         theme: theme_opt(),

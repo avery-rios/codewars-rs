@@ -61,7 +61,11 @@ impl Coq {
 
         if has_preloaded {
             root.push(PRELOADED_FILE);
-            fs::File::options().write(true).create(true).open(&root)?;
+            fs::File::options()
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(&root)?;
             root.pop();
         }
 

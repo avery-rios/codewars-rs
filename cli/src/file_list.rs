@@ -31,12 +31,14 @@ impl Display for ParseErr {
 }
 impl error::Error for ParseErr {}
 
+struct CustomOptions {
+    console_width: usize,
+    opt: options::Options,
+}
+
 enum EzaOptions {
     Default,
-    Custom {
-        console_width: usize,
-        opt: options::Options,
-    },
+    Custom(Box<CustomOptions>),
 }
 pub struct Options {
     theme: theme::Theme,
@@ -56,14 +58,14 @@ impl Options {
             OptionsResult::Ok(opt, _) => Ok(Self {
                 theme: opt.theme.to_theme(is_a_tty),
                 is_a_tty,
-                options: EzaOptions::Custom {
+                options: EzaOptions::Custom(Box::new(CustomOptions {
                     console_width: opt
                         .view
                         .width
                         .actual_terminal_width()
                         .context("failed to get terminal width")?,
                     opt,
-                },
+                })),
             }),
             OptionsResult::InvalidOptions(err) => {
                 Err(anyhow::Error::new(ParseErr(err)).context("invalid options"))
@@ -95,11 +97,14 @@ fn list_dir_custom(
     opt: &options::Options,
     path: PathBuf,
 ) -> Result<()> {
-    let files =
-        Vec::from([
-            File::from_args(path, None, None, opt.view.deref_links, opt.view.total_size)
-                .context("failed to open file")?,
-        ]);
+    let files = Vec::from([File::from_args(
+        path,
+        None,
+        None,
+        opt.view.deref_links,
+        opt.view.total_size,
+        None,
+    )]);
     let out = &mut io::stdout();
     let theme = &o.theme;
     let git_ignoring = git_ignore_to_bool(opt.filter.git_ignore);
@@ -128,7 +133,7 @@ fn list_dir_custom(
             filter: &opt.filter,
             git_ignoring,
             git: None,
-            git_repos: false,
+            git_repos: config::GIT_REPO,
         }
         .render(out),
         Mode::GridDetails(go) => grid_details::Render {
@@ -136,14 +141,13 @@ fn list_dir_custom(
             files,
             theme,
             file_style: &opt.view.file_style,
-            grid: &go.grid,
             details: &go.details,
             filter: &opt.filter,
             row_threshold: go.row_threshold,
             git_ignoring,
             git: None,
             console_width,
-            git_repos: false,
+            git_repos: config::GIT_REPO,
         }
         .render(out),
         Mode::Lines => lines::Render {
@@ -166,8 +170,8 @@ fn list_dir_def(o: &Options, path: PathBuf) -> Result<()> {
             None,
             config::DEREF_LINKS,
             config::TOTAL_SIZE,
-        )
-        .context("failed to open file")?]),
+            None,
+        )]),
         theme: &o.theme,
         file_style: &config::file_name_opt(o.is_a_tty),
         opts: &config::DETAILS_OPT,
@@ -184,6 +188,6 @@ fn list_dir_def(o: &Options, path: PathBuf) -> Result<()> {
 pub fn list_dir(o: &Options, path: PathBuf) -> Result<()> {
     match &o.options {
         EzaOptions::Default => list_dir_def(o, path),
-        EzaOptions::Custom { console_width, opt } => list_dir_custom(o, *console_width, opt, path),
+        EzaOptions::Custom(custom) => list_dir_custom(o, custom.console_width, &custom.opt, path),
     }
 }
