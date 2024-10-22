@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     util::{call_command_at, fs},
-    Code, WorkspaceObject,
+    Code, Config, WorkspaceObject,
 };
 
 const STATE_FILE: &CStr = c"haskell_state.json";
@@ -86,7 +86,7 @@ impl Haskell {
             root,
         })
     }
-    pub fn create(root: &Path, code: &str, test: &str) -> Result<Self, CreateError> {
+    pub fn create(root: &Path, project: Config) -> Result<Self, CreateError> {
         fn write_code(
             root: BorrowedFd,
             base: String,
@@ -108,15 +108,20 @@ impl Haskell {
         }
         let root = fs::open_dirfd(root).map_err(CreateErrorInner::Io)?;
 
-        let code_mod =
-            module_name(code).ok_or_else(|| CreateErrorInner::UnknownCode(code.to_string()))?;
-        let code_path = write_code(root.as_fd(), "src".into(), code_mod, code)
+        let code_mod = module_name(project.code)
+            .ok_or_else(|| CreateErrorInner::UnknownCode(project.code.to_string()))?;
+        let code_path = write_code(root.as_fd(), "src".into(), code_mod, project.code)
             .map_err(CreateErrorInner::WriteCode)?;
 
-        let test_mod =
-            module_name(test).ok_or_else(|| CreateErrorInner::UnknownTest(test.to_string()))?;
-        let test_path = write_code(root.as_fd(), "test/sample".into(), test_mod, test)
-            .map_err(CreateErrorInner::WriteCode)?;
+        let test_mod = module_name(project.fixture)
+            .ok_or_else(|| CreateErrorInner::UnknownTest(project.fixture.to_string()))?;
+        let test_path = write_code(
+            root.as_fd(),
+            "test/sample".into(),
+            test_mod,
+            project.fixture,
+        )
+        .map_err(CreateErrorInner::WriteCode)?;
 
         fs::write(
             root.as_fd(),
@@ -141,9 +146,10 @@ impl Haskell {
 
         fs::write(
             root.as_fd(),
-            c"challenge.cabal",
+            format!("{}.cabal", project.slug),
             format!(
                 include_str!("./haskell/challenge.cabal"),
+                package = project.slug,
                 code_module = code_mod,
                 test_module = test_mod
             ),

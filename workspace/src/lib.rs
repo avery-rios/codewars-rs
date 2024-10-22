@@ -2,6 +2,13 @@ use std::{error, io};
 
 mod util;
 
+pub struct Config<'a> {
+    pub version_id: &'a str,
+    pub slug: &'a str,
+    pub code: &'a str,
+    pub fixture: &'a str,
+    pub has_preload: bool,
+}
 pub struct Code {
     pub solution: String,
     pub fixture: String,

@@ -1,0 +1,9 @@
+[package]
+name = "{crate_name}"
+version = "0.1.0"
+edition = "2021"
+rust-version = "{rust_version}"
+
+[features]
+local = []
+default = ["local"]

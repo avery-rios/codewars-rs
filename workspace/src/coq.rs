@@ -7,7 +7,7 @@ use rustix::{
 
 use crate::{
     util::{call_command_at, fs},
-    Code, WorkspaceObject,
+    Code, Config, WorkspaceObject,
 };
 
 pub struct Coq {
@@ -31,11 +31,11 @@ const CODE_FILE: &CStr = c"Solution.v";
 const FIXTURE_FILE: &CStr = c"Test.v";
 
 impl Coq {
-    pub fn create(root: &Path, has_preloaded: bool, code: &str, test: &str) -> io::Result<Self> {
+    pub fn create(root: &Path, project: Config) -> io::Result<Self> {
         let root = fs::open_dirfd(root)?;
 
-        fs::write(root.as_fd(), CODE_FILE, code)?;
-        fs::write(root.as_fd(), FIXTURE_FILE, test)?;
+        fs::write(root.as_fd(), CODE_FILE, project.code)?;
+        fs::write(root.as_fd(), FIXTURE_FILE, project.fixture)?;
         fs::write(
             root.as_fd(),
             c"_CoqProject",
@@ -46,7 +46,7 @@ impl Coq {
             c"Makefile",
             format!(
                 include_str!("./coq/Makefile"),
-                files = if has_preloaded {
+                files = if project.has_preload {
                     concat!(file_name!(preloaded), " ", file_name!(code))
                 } else {
                     file_name!(code)
@@ -54,7 +54,7 @@ impl Coq {
             ),
         )?;
 
-        if has_preloaded {
+        if project.has_preload {
             // create empty file
             rustix::fs::openat(
                 root.as_fd(),

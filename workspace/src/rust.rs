@@ -1,4 +1,4 @@
-use std::{ffi::CStr, io, path::Path};
+use std::{borrow::Cow, ffi::CStr, io, path::Path};
 
 use rustix::{
     fd::{AsFd, OwnedFd},
@@ -7,28 +7,8 @@ use rustix::{
 
 use crate::{
     util::{call_command_at, fs},
-    Code, WorkspaceObject,
+    Code, Config, WorkspaceObject,
 };
-
-macro_rules! crate_name {
-    () => {
-        "challenge"
-    };
-}
-
-const CARGO_1_62: &str = concat!(
-    "[package]\n",
-    concat!("name = \"", crate_name!(), "\"\n"),
-    "version = \"0.1.0\"\n",
-    "edition = \"2021\"\n",
-    "rust-version = \"1.62\"\n",
-    "\n",
-    "[features]\n",
-    "local = []\n",
-    "default = [\"local\"]"
-);
-
-const CRATE_NAME: &str = crate_name!();
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
@@ -41,19 +21,24 @@ const CODE_PATH: &CStr = c"src/lib.rs";
 const TEST_PATH: &CStr = c"tests/sample.rs";
 
 impl Rust {
-    pub const VERSION: &'static str = "1.62";
-
     pub fn open(root: &Path) -> Result<Self, Error> {
         Ok(Self {
             root: fs::open_dirfd(root)?,
         })
     }
 
-    pub fn create(root: impl AsRef<Path>, code: &str, test: &str) -> Result<Self, Error> {
+    pub fn create(root: impl AsRef<Path>, project: Config) -> Result<Self, Error> {
         let root = fs::open_dirfd(root.as_ref())?;
 
         fs::mkdirat(root.as_fd(), c"src")?;
-        fs::write(root.as_fd(), CODE_PATH, code)?;
+        fs::write(root.as_fd(), CODE_PATH, project.code)?;
+
+        let crate_name = if project.slug.starts_with(|c: char| !c.is_alphabetic()) {
+            Cow::Owned(format!("cw-{}", project.slug))
+        } else {
+            Cow::Borrowed(project.slug)
+        };
+        let crate_name_rs = crate_name.replace('-', "_");
 
         fs::mkdirat(root.as_fd(), c"tests")?;
         fs::write(
@@ -61,9 +46,10 @@ impl Rust {
             TEST_PATH,
             format!(
                 "#[cfg(feature = \"local\")]\n\
-                use {CRATE_NAME}::*;\n\
+                use {crate_name_rs}::*;\n\
                 \n\
-                {test}"
+                {}",
+                project.fixture
             ),
         )?;
 
@@ -74,7 +60,15 @@ impl Rust {
             include_str!("./rust/profile.toml"),
         )?;
 
-        fs::write(root.as_fd(), c"Cargo.toml", CARGO_1_62)?;
+        fs::write(
+            root.as_fd(),
+            c"Cargo.toml",
+            format!(
+                include_str!("./rust/Cargo.toml"),
+                crate_name = crate_name,
+                rust_version = project.version_id
+            ),
+        )?;
 
         Ok(Self { root })
     }

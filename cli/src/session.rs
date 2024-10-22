@@ -20,6 +20,7 @@ use crate::{
 struct SessionState {
     kata_id: KataId,
     language: KnownLangId,
+    slug: String,
     project: ProjectInfo,
     session: SessionInfo,
 }
@@ -39,6 +40,46 @@ fn create_workspace_dir(env: &CmdEnv, state: &SessionState, lang: &str) -> Resul
     Ok(dir)
 }
 
+fn get_kata(env: &CmdEnv, cmd_state: &mut CmdState, kata: &KataId) -> Result<String> {
+    match cmd_state.index_mut().kata.entry(kata.to_owned()) {
+        btree_map::Entry::Occupied(o) => Ok(o.get().slug.clone()),
+        btree_map::Entry::Vacant(v) => {
+            println!("Getting kata {}", kata);
+
+            let info = env
+                .runtime
+                .block_on(env.api_client.get_challenge(kata))
+                .context("failed to get kata")?;
+            let dir_name = codewars_solution::kata_dir(kata, &info.slug);
+            let path = Path::new(&env.root).join(&dir_name);
+            fs::create_dir(&path).context("failed to create dir")?;
+            let entry = codewars_solution::index::IndexEntry {
+                name: info.name.clone(),
+                slug: info.slug.clone(),
+                path: dir_name,
+            };
+            let slug = info.slug.clone();
+            kata::save_kata(
+                path.clone(),
+                &{
+                    use codewars_solution::*;
+                    Metadata {
+                        version: Version::CURRENT,
+                        api_version: ApiVersion::CURRENT,
+                        created_at: chrono::Local::now().into(),
+                        updated_at: Vec::new(),
+                    }
+                },
+                info,
+            )
+            .context("failed to save kata info")?;
+            v.insert(entry);
+            cmd_state.index_dirty = true;
+            Ok(slug)
+        }
+    }
+}
+
 pub fn start_session(
     env: &CmdEnv,
     cmd_state: &mut CmdState,
@@ -51,121 +92,100 @@ pub fn start_session(
         .block_on(client.start_project(&kata, lang))
         .context("failed to start project")?;
     let ses_state = SessionState {
-        kata_id: kata,
+        kata_id: kata.clone(),
         language: lang,
-        session: env
-            .runtime
-            .block_on(project::start_session(client, &project))
-            .context("failed to start session")?,
+        slug: get_kata(env, cmd_state, &kata).context("failed to get kata")?,
+        session: {
+            let mut info = env
+                .runtime
+                .block_on(project::start_session(client, &project))
+                .context("failed to start session")?;
+            let version_id =
+                dialoguer::Select::with_theme(&dialoguer::theme::ColorfulTheme::default())
+                    .with_prompt("Language version?")
+                    .items(
+                        &info
+                            .language_versions
+                            .iter()
+                            .map(|v| v.label.as_str())
+                            .collect::<Vec<_>>(),
+                    )
+                    .interact()
+                    .context("failed to get language version")?;
+            info.active_version = info.language_versions[version_id].id.clone();
+            info
+        },
         project,
     };
-    let session = Session::from_project(client, &ses_state.project, &ses_state.session);
-    let root = create_workspace_dir(env, &ses_state, lang.as_str())
+    let workspace_root = create_workspace_dir(env, &ses_state, lang.as_str())
         .context("failed to create workspace dir")?;
+    let workspace_cfg = workspace::Config {
+        slug: &ses_state.slug,
+        version_id: &ses_state.session.active_version,
+        code: &ses_state.session.setup,
+        fixture: &ses_state.session.example_fixture,
+        has_preload: dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
+            .with_prompt("Has preloaded code?")
+            .default(false)
+            .show_default(true)
+            .interact()
+            .context("failed to prompt if there is preloaded code")?,
+    };
     match lang {
-        KnownLangId::Coq => {
-            let has_preloaded = dialoguer::Confirm::new()
-                .with_prompt("Has preloaded code? ")
-                .default(true)
-                .show_default(true)
-                .interact()
-                .context("failed to prompt if there is preloaded code")?;
-
-            let ws = workspace::Coq::create(
-                &root,
-                has_preloaded,
-                &session.info.setup,
-                &session.info.example_fixture,
-            )
-            .context("failed to create workspace")?;
-            session_cmd(
-                env,
-                cmd_state,
-                &ses_state.kata_id,
-                lang,
-                session,
-                root.as_path(),
-                &ws,
-            )
-        }
-        KnownLangId::Rust => {
-            let ws = workspace::Rust::create(
-                create_workspace_dir(env, &ses_state, "rust")?,
-                &session.info.setup,
-                &session.info.example_fixture,
-            )
-            .context("failed to create workspace")?;
-            session_cmd(
-                env,
-                cmd_state,
-                &ses_state.kata_id,
-                lang,
-                session,
-                &root,
-                &ws,
-            )
-        }
-        KnownLangId::Haskell => {
-            let ws = workspace::Haskell::create(
-                &root,
-                &session.info.setup,
-                &session.info.example_fixture,
-            )
-            .context("failed to create workspace")?;
-            session_cmd(
-                env,
-                cmd_state,
-                &ses_state.kata_id,
-                lang,
-                session,
-                &root,
-                &ws,
-            )
-        }
+        KnownLangId::Coq => session_cmd(
+            env,
+            &ses_state,
+            &workspace_root,
+            &workspace::Coq::create(&workspace_root, workspace_cfg)
+                .context("failed to create workspace")?,
+        ),
+        KnownLangId::Rust => session_cmd(
+            env,
+            &ses_state,
+            &workspace_root,
+            &workspace::Rust::create(&workspace_root, workspace_cfg)
+                .context("failed to create workspace")?,
+        ),
+        KnownLangId::Haskell => session_cmd(
+            env,
+            &ses_state,
+            &workspace_root,
+            &workspace::Haskell::create(&workspace_root, workspace_cfg)
+                .context("failed to create workspace")?,
+        ),
         l => {
-            bail!("Unsupported language {}", l)
+            bail!("Unsupported language {l}")
         }
     }
 }
 
-pub fn open_session(env: &CmdEnv, cmd_state: &mut CmdState, path: impl AsRef<Path>) -> Result<()> {
-    let client = env.unofficial_client.as_ref().context("login required")?;
+pub fn open_session(env: &CmdEnv, _: &mut CmdState, path: impl AsRef<Path>) -> Result<()> {
     let state: SessionState = serde_json::from_slice(
         &fs::read(path.as_ref().join(SESSION_FILE)).context("failed to read session file")?,
     )
     .context("invalid session file")?;
-    let session = Session::from_project(client, &state.project, &state.session);
-    let root = path.as_ref();
+    let workspace_root = path.as_ref();
     match state.language {
         KnownLangId::Coq => session_cmd(
             env,
-            cmd_state,
-            &state.kata_id,
-            state.language,
-            session,
-            root,
-            &workspace::Coq::open(root).context("failed to open workspace")?,
+            &state,
+            workspace_root,
+            &workspace::Coq::open(workspace_root).context("failed to open workspace")?,
         ),
         KnownLangId::Rust => session_cmd(
             env,
-            cmd_state,
-            &state.kata_id,
-            state.language,
-            session,
-            root,
-            &workspace::Rust::open(root).context("failed to open workspace")?,
+            &state,
+            workspace_root,
+            &workspace::Rust::open(workspace_root).context("failed to open workspace")?,
         ),
         KnownLangId::Haskell => session_cmd(
             env,
-            cmd_state,
-            &state.kata_id,
-            state.language,
-            session,
-            root,
-            &workspace::Haskell::open(root).context("failed to open workspace")?,
+            &state,
+            workspace_root,
+            &workspace::Haskell::open(workspace_root).context("failed to open workspace")?,
         ),
         l => {
-            bail!("Unsupported language {}", l)
+            bail!("Unsupported language {l}")
         }
     }
 }
@@ -237,57 +257,14 @@ fn clean(cmd: CleanCmd, root: &Path, workspace: &dyn WorkspaceObject) -> Result<
     }
 }
 
-fn get_kata_path(env: &CmdEnv, cmd_state: &mut CmdState, kata: &KataId) -> Result<PathBuf> {
-    match cmd_state.index_mut().kata.entry(kata.to_owned()) {
-        btree_map::Entry::Occupied(o) => Ok(Path::new(&env.root).join(&o.get().path)),
-        btree_map::Entry::Vacant(v) => {
-            println!("Getting kata {}", kata);
-
-            let info = env
-                .runtime
-                .block_on(env.api_client.get_challenge(kata))
-                .context("failed to get kata")?;
-            let dir_name = codewars_solution::kata_dir(kata, &info.slug);
-            let path = Path::new(&env.root).join(&dir_name);
-            fs::create_dir(&path).context("failed to create dir")?;
-            let entry = codewars_solution::index::IndexEntry {
-                name: info.name.clone(),
-                slug: info.slug.clone(),
-                path: dir_name,
-            };
-            kata::save_kata(
-                path.clone(),
-                &{
-                    use codewars_solution::*;
-                    Metadata {
-                        version: Version::CURRENT,
-                        api_version: ApiVersion::CURRENT,
-                        created_at: chrono::Local::now().into(),
-                        updated_at: Vec::new(),
-                    }
-                },
-                info,
-            )
-            .context("failed to save kata info")?;
-            v.insert(entry);
-            cmd_state.index_dirty = true;
-            Ok(path)
-        }
-    }
-}
-
-fn save(
-    env: &CmdEnv,
-    cmd_state: &mut CmdState,
-    kata: &KataId,
-    lang: KnownLangId,
-    opt: SaveOpt,
-    root: &Path,
-) -> Result<()> {
-    let mut kata_dir = get_kata_path(env, cmd_state, kata)?;
+fn save(env: &CmdEnv, ses_state: &SessionState, opt: SaveOpt, root: &Path) -> Result<()> {
+    let mut kata_dir = Path::new(&env.root).join(codewars_solution::kata_dir(
+        &ses_state.kata_id,
+        &ses_state.slug,
+    ));
     match opt.tag {
-        Some(t) => kata_dir.push(format!("{}-{}", lang, t)),
-        None => kata_dir.push(lang.as_str()),
+        Some(t) => kata_dir.push(format!("{}-{}", ses_state.language, t)),
+        None => kata_dir.push(ses_state.language.as_str()),
     }
     println!("Solution will be saved to {}", kata_dir.display());
 
@@ -297,7 +274,7 @@ fn save(
             .context("failed to list workspace dir")?;
     }
     if !(opt.yes
-        || dialoguer::Confirm::new()
+        || dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
             .with_prompt("Save solution? ")
             .interact()
             .context("failed to read select")?)
@@ -320,21 +297,28 @@ fn save(
 
 fn session_cmd(
     env: &CmdEnv,
-    state: &mut CmdState,
-    kata: &KataId,
-    lang: KnownLangId,
-    session: Session<'_, '_, '_>,
-    root: &Path,
+    ses_state: &SessionState,
+    workspace_root: &Path,
     workspace: &dyn WorkspaceObject,
 ) -> Result<()> {
     let prompt = format!(
-        "kata {} ({} {})> ",
-        kata, &session.info.language_name, &session.info.active_version
+        "kata {}[{}] ({} {})> ",
+        ses_state.slug,
+        ses_state.kata_id,
+        &ses_state.session.language_name,
+        &ses_state.session.active_version
     );
     let mut editor = new_editor().context("failed to create editor")?;
+    let session = Session::from_project(
+        env.unofficial_client
+            .as_ref()
+            .context("login is required")?,
+        &ses_state.project,
+        &ses_state.session,
+    );
     loop {
         match next_cmd::<SessionCmd>(&prompt, &mut editor) {
-            SessionCmd::Show => show_session(kata, &session),
+            SessionCmd::Show => show_session(&ses_state.kata_id, &session),
             SessionCmd::Test => {
                 match workspace
                     .get_code()
@@ -367,12 +351,12 @@ fn session_cmd(
                 }
             }
             SessionCmd::Clean { cmd } => {
-                if let Err(e) = clean(cmd, root, workspace) {
+                if let Err(e) = clean(cmd, workspace_root, workspace) {
                     print_err(e)
                 }
             }
             SessionCmd::Save(opt) => {
-                if let Err(e) = save(env, state, kata, lang, opt, root) {
+                if let Err(e) = save(env, ses_state, opt, workspace_root) {
                     print_err(e)
                 }
             }
