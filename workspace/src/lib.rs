@@ -31,3 +31,6 @@ pub use haskell::Haskell;
 
 pub mod coq;
 pub use coq::Coq;
+
+pub mod scala;
+pub use scala::Scala;

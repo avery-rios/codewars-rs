@@ -91,6 +91,7 @@ pub fn start_session(
         .runtime
         .block_on(client.start_project(&kata, lang))
         .context("failed to start project")?;
+    let theme = dialoguer::theme::ColorfulTheme::default();
     let ses_state = SessionState {
         kata_id: kata.clone(),
         language: lang,
@@ -100,18 +101,17 @@ pub fn start_session(
                 .runtime
                 .block_on(project::start_session(client, &project))
                 .context("failed to start session")?;
-            let version_id =
-                dialoguer::Select::with_theme(&dialoguer::theme::ColorfulTheme::default())
-                    .with_prompt("Language version?")
-                    .items(
-                        &info
-                            .language_versions
-                            .iter()
-                            .map(|v| v.label.as_str())
-                            .collect::<Vec<_>>(),
-                    )
-                    .interact()
-                    .context("failed to get language version")?;
+            let version_id = dialoguer::Select::with_theme(&theme)
+                .with_prompt("Language version?")
+                .items(
+                    &info
+                        .language_versions
+                        .iter()
+                        .map(|v| v.label.as_str())
+                        .collect::<Vec<_>>(),
+                )
+                .interact()
+                .context("failed to get language version")?;
             info.active_version = info.language_versions[version_id].id.clone();
             info
         },
@@ -124,7 +124,7 @@ pub fn start_session(
         version_id: &ses_state.session.active_version,
         code: &ses_state.session.setup,
         fixture: &ses_state.session.example_fixture,
-        has_preload: dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
+        has_preload: dialoguer::Confirm::with_theme(&theme)
             .with_prompt("Has preloaded code?")
             .default(false)
             .show_default(true)
@@ -152,6 +152,20 @@ pub fn start_session(
             &workspace_root,
             &workspace::Haskell::create(&workspace_root, workspace_cfg)
                 .context("failed to create workspace")?,
+        ),
+        KnownLangId::Scala => session_cmd(
+            env,
+            &ses_state,
+            &workspace_root,
+            &workspace::Scala::create(
+                &workspace_root,
+                workspace_cfg,
+                &dialoguer::Input::<String>::with_theme(&theme)
+                    .with_prompt("scala version?")
+                    .interact()
+                    .context("failed to get scala version")?,
+            )
+            .context("failed to create workspace")?,
         ),
         l => {
             bail!("Unsupported language {l}")
