@@ -32,6 +32,9 @@ pub use haskell::Haskell;
 pub mod java;
 pub use java::Java;
 
+pub mod kotlin;
+pub use kotlin::Kotlin;
+
 pub mod coq;
 pub use coq::Coq;
 

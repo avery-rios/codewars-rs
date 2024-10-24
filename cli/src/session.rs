@@ -131,42 +131,37 @@ pub fn start_session(
             .interact()
             .context("failed to prompt if there is preloaded code")?,
     };
+    macro_rules! create {
+        ($i:ident) => {
+            session_cmd(
+                env,
+                &ses_state,
+                &workspace_root,
+                &workspace::$i::create(&workspace_root, workspace_cfg)
+                    .context("failed to create workspace")?,
+            )
+        };
+    }
     match lang {
-        KnownLangId::Coq => session_cmd(
+        KnownLangId::Coq => create!(Coq),
+        KnownLangId::Rust => create!(Rust),
+        KnownLangId::Haskell => create!(Haskell),
+        KnownLangId::Java => create!(Java),
+        KnownLangId::Kotlin => session_cmd(
             env,
             &ses_state,
             &workspace_root,
-            &workspace::Coq::create(&workspace_root, workspace_cfg)
-                .context("failed to create workspace")?,
+            &workspace::Kotlin::create(
+                &workspace_root,
+                workspace_cfg,
+                dialoguer::Input::with_theme(&theme)
+                    .with_prompt("patch version?")
+                    .interact()
+                    .context("failed to get kotlin compiler patch version")?,
+            )
+            .context("failed to create workspace")?,
         ),
-        KnownLangId::Rust => session_cmd(
-            env,
-            &ses_state,
-            &workspace_root,
-            &workspace::Rust::create(&workspace_root, workspace_cfg)
-                .context("failed to create workspace")?,
-        ),
-        KnownLangId::Haskell => session_cmd(
-            env,
-            &ses_state,
-            &workspace_root,
-            &workspace::Haskell::create(&workspace_root, workspace_cfg)
-                .context("failed to create workspace")?,
-        ),
-        KnownLangId::Java => session_cmd(
-            env,
-            &ses_state,
-            &workspace_root,
-            &workspace::Java::create(&workspace_root, workspace_cfg)
-                .context("failed to create workspace")?,
-        ),
-        KnownLangId::TypeScript => session_cmd(
-            env,
-            &ses_state,
-            &workspace_root,
-            &workspace::TypeScript::create(&workspace_root, workspace_cfg)
-                .context("failed to create workspace")?,
-        ),
+        KnownLangId::TypeScript => create!(TypeScript),
         KnownLangId::Scala => session_cmd(
             env,
             &ses_state,
@@ -193,43 +188,24 @@ pub fn open_session(env: &CmdEnv, _: &mut CmdState, path: impl AsRef<Path>) -> R
     )
     .context("invalid session file")?;
     let workspace_root = path.as_ref();
+    macro_rules! open {
+        ($i:ident) => {
+            session_cmd(
+                env,
+                &state,
+                workspace_root,
+                &workspace::$i::open(workspace_root).context("failed to open workspace")?,
+            )
+        };
+    }
     match state.language {
-        KnownLangId::Coq => session_cmd(
-            env,
-            &state,
-            workspace_root,
-            &workspace::Coq::open(workspace_root).context("failed to open workspace")?,
-        ),
-        KnownLangId::Rust => session_cmd(
-            env,
-            &state,
-            workspace_root,
-            &workspace::Rust::open(workspace_root).context("failed to open workspace")?,
-        ),
-        KnownLangId::Haskell => session_cmd(
-            env,
-            &state,
-            workspace_root,
-            &workspace::Haskell::open(workspace_root).context("failed to open workspace")?,
-        ),
-        KnownLangId::Java => session_cmd(
-            env,
-            &state,
-            workspace_root,
-            &workspace::Java::open(workspace_root).context("failed to open workspace")?,
-        ),
-        KnownLangId::TypeScript => session_cmd(
-            env,
-            &state,
-            workspace_root,
-            &workspace::TypeScript::open(workspace_root).context("failed to open workspace")?,
-        ),
-        KnownLangId::Scala => session_cmd(
-            env,
-            &state,
-            workspace_root,
-            &workspace::Scala::open(workspace_root).context("failed to open workspace")?,
-        ),
+        KnownLangId::Coq => open!(Coq),
+        KnownLangId::Rust => open!(Rust),
+        KnownLangId::Haskell => open!(Haskell),
+        KnownLangId::Java => open!(Java),
+        KnownLangId::Kotlin => open!(Kotlin),
+        KnownLangId::TypeScript => open!(TypeScript),
+        KnownLangId::Scala => open!(Scala),
         l => {
             bail!("Unsupported language {l}")
         }
