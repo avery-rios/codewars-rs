@@ -153,6 +153,13 @@ pub fn start_session(
             &workspace::Haskell::create(&workspace_root, workspace_cfg)
                 .context("failed to create workspace")?,
         ),
+        KnownLangId::Java => session_cmd(
+            env,
+            &ses_state,
+            &workspace_root,
+            &workspace::Java::create(&workspace_root, workspace_cfg)
+                .context("failed to create workspace")?,
+        ),
         KnownLangId::Scala => session_cmd(
             env,
             &ses_state,
@@ -197,6 +204,18 @@ pub fn open_session(env: &CmdEnv, _: &mut CmdState, path: impl AsRef<Path>) -> R
             &state,
             workspace_root,
             &workspace::Haskell::open(workspace_root).context("failed to open workspace")?,
+        ),
+        KnownLangId::Java => session_cmd(
+            env,
+            &state,
+            workspace_root,
+            &workspace::Java::open(workspace_root).context("failed to open workspace")?,
+        ),
+        KnownLangId::Scala => session_cmd(
+            env,
+            &state,
+            workspace_root,
+            &workspace::Scala::open(workspace_root).context("failed to open workspace")?,
         ),
         l => {
             bail!("Unsupported language {l}")
