@@ -35,5 +35,8 @@ pub use java::Java;
 pub mod coq;
 pub use coq::Coq;
 
+pub mod typescript;
+pub use typescript::TypeScript;
+
 pub mod scala;
 pub use scala::Scala;

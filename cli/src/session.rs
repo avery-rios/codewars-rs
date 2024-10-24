@@ -160,6 +160,13 @@ pub fn start_session(
             &workspace::Java::create(&workspace_root, workspace_cfg)
                 .context("failed to create workspace")?,
         ),
+        KnownLangId::TypeScript => session_cmd(
+            env,
+            &ses_state,
+            &workspace_root,
+            &workspace::TypeScript::create(&workspace_root, workspace_cfg)
+                .context("failed to create workspace")?,
+        ),
         KnownLangId::Scala => session_cmd(
             env,
             &ses_state,
@@ -210,6 +217,12 @@ pub fn open_session(env: &CmdEnv, _: &mut CmdState, path: impl AsRef<Path>) -> R
             &state,
             workspace_root,
             &workspace::Java::open(workspace_root).context("failed to open workspace")?,
+        ),
+        KnownLangId::TypeScript => session_cmd(
+            env,
+            &state,
+            workspace_root,
+            &workspace::TypeScript::open(workspace_root).context("failed to open workspace")?,
         ),
         KnownLangId::Scala => session_cmd(
             env,
@@ -316,14 +329,7 @@ fn save(env: &CmdEnv, ses_state: &SessionState, opt: SaveOpt, root: &Path) -> Re
         return Ok(());
     }
 
-    fs_extra::dir::copy(
-        root,
-        kata_dir,
-        &fs_extra::dir::CopyOptions::new()
-            .overwrite(false)
-            .copy_inside(true),
-    )
-    .context("failed to copy dir")?;
+    dircpy::copy_dir(root, kata_dir).context("failed to copy dir")?;
     println!("Solution saved");
     Ok(())
 }

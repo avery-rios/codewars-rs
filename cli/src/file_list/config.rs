@@ -38,12 +38,12 @@ pub const DETAILS_OPT: details::Options = details::Options {
             columns: Columns {
                 time_types: TimeTypes {
                     modified: true,
-                    changed: false,
+                    changed: true,
                     accessed: false,
                     created: true,
                 },
                 inode: false,
-                links: false,
+                links: true,
                 blocksize: false,
                 group: true,
                 git: true,
@@ -63,7 +63,7 @@ pub const DETAILS_OPT: details::Options = details::Options {
     secattr: false,
     mounts: false,
     color_scale: COLOR_SCALE_OPT,
-    follow_links: true,
+    follow_links: false,
 };
 
 #[inline]
@@ -104,7 +104,7 @@ pub const GIT_REPO: bool = true;
 
 pub const TERM_WIDTH: TerminalWidth = TerminalWidth::Automatic;
 
-pub const DEREF_LINKS: bool = true;
+pub const DEREF_LINKS: bool = false;
 
 pub const TOTAL_SIZE: bool = false;
 
@@ -118,7 +118,7 @@ pub fn options(is_a_tty: bool) -> options::Options {
             width: TERM_WIDTH,
             file_style: file_name_opt(is_a_tty),
             deref_links: DEREF_LINKS,
-            follow_links: true,
+            follow_links: false,
             total_size: TOTAL_SIZE,
         },
         theme: theme_opt(),
