@@ -16,21 +16,13 @@ use crate::{
 
 const STATE_PATH: &CStr = c"state.json";
 
-fn public_class(mut code: &str) -> Option<&str> {
-    while !code.is_empty() {
-        let (_, t) = code.split_once("public")?;
-        match t.trim_start().strip_prefix("class") {
-            Some(t) => {
-                return Some(
-                    t.trim_start()
-                        .split_once(|c: char| !(c.is_alphanumeric() || c == '_' || c == '$'))?
-                        .0,
-                )
-            }
-            None => code = t,
-        }
-    }
-    None
+fn public_class(code: &str) -> Option<&str> {
+    let (_, t) = code.split_once("class")?;
+    return Some(
+        t.trim_start()
+            .split_once(|c: char| !(c.is_alphanumeric() || c == '_' || c == '$'))?
+            .0,
+    );
 }
 
 #[derive(Serialize, Deserialize)]
