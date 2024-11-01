@@ -34,7 +34,22 @@ fn show_output(output: &Output, prefix: u8, f: &mut fmt::Formatter<'_>) -> fmt::
         Output::Passed { v } => {
             write!(f, "{}", Paint::green(format_args!("✔ {}", v)))
         }
-        Output::Log { .. } => Ok(()),
+        Output::Log { v } => {
+            writeln!(f, "log:")?;
+            let mut first = true;
+            for l in v.lines() {
+                if first {
+                    first = false
+                } else {
+                    f.write_char('\n')?;
+                }
+                for _ in 0..prefix {
+                    f.write_char(' ')?;
+                }
+                write!(f, "  {l}")?;
+            }
+            Ok(())
+        }
         Output::Error { v } => {
             write!(f, "{}", Paint::red(format_args!("✘ {}", v)))
         }

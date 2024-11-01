@@ -69,14 +69,14 @@ pub enum Output {
 
 #[derive(Debug, Deserialize)]
 pub struct RunStat {
-    pub passed: u8,
-    pub failed: u8,
+    pub passed: u32,
+    pub failed: u32,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct RunStatHidden {
-    pub passed: u8,
-    pub failed: u8,
+    pub passed: u32,
+    pub failed: u32,
     pub hidden: RunStat,
 }
 
@@ -87,9 +87,9 @@ pub struct RunResult {
     pub completed: bool,
     pub output: Vec<Output>,
     // pub success_mode: (),
-    pub passed: u8,
-    pub failed: u8,
-    pub errors: u8,
+    pub passed: u32,
+    pub failed: u32,
+    pub errors: u32,
     // pub error: Option<()>,
     pub assertions: RunStatHidden,
     pub specs: RunStatHidden,
