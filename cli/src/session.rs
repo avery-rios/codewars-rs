@@ -3,6 +3,7 @@ use clap::{Args, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::btree_map,
+    fmt::Display,
     fs,
     path::{Path, PathBuf},
 };
@@ -101,18 +102,30 @@ pub fn start_session(
                 .runtime
                 .block_on(project::start_session(client, &project))
                 .context("failed to start session")?;
-            let version_id = dialoguer::Select::with_theme(&theme)
+            struct VersionIdx<'a>(&'a str, usize);
+            impl<'a> Display for VersionIdx<'a> {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    f.write_str(self.0)
+                }
+            }
+            let versions = info
+                .language_versions
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, v)| {
+                    if v.supported {
+                        Some(VersionIdx(v.label.as_str(), idx))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            let version_idx = dialoguer::Select::with_theme(&theme)
                 .with_prompt("Language version?")
-                .items(
-                    &info
-                        .language_versions
-                        .iter()
-                        .map(|v| v.label.as_str())
-                        .collect::<Vec<_>>(),
-                )
+                .items(&versions)
                 .interact()
                 .context("failed to get language version")?;
-            info.active_version = info.language_versions[version_id].id.clone();
+            info.active_version = info.language_versions[versions[version_idx].1].id.clone();
             info
         },
         project,
